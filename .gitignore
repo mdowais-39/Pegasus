@@ -1,5 +1,4 @@
-# IBM AML datasets
-datasets/ibm-aml/*.csv
+
 
 # Generated data
 datasets/processed/*
