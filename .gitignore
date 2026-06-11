@@ -1,0 +1,12 @@
+# IBM AML datasets
+datasets/ibm-aml/*.csv
+
+# Generated data
+datasets/processed/*
+
+# Rust build artifacts
+backend/target/
+
+# Python
+.venv/
+__pycache__/

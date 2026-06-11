@@ -344,3 +344,65 @@ src/
 └── state/
     ├── mod.rs
     └── app_state.rs
+
+# Intermediate Chnages
+- Switched to SQLx Migration for better bacckend axum handling
+- backend structuree
+routes/
+│
+├── health_routes.rs
+└── statement_routes.rs
+
+handlers/
+│
+├── health_handler.rs
+└── statement_handler.rs
+
+models/
+│
+├── health.rs
+└── statement.rs
+
+repositories/
+│
+├── statements.rs
+└── mod.rs
+
+services/
+│
+├── service_checker.rs
+├── storage.rs
+└── mod.rs
+
+# Phase 1: Multi-Format Ingestion Pipeline
+By the end of Phase 1, this flow should work:
+
+Frontend
+   ↓
+Upload PDF/CSV/Image
+   ↓
+Rust Backend
+   ↓
+Validate File
+   ↓
+Store File
+   ↓
+Insert Statement Record
+   ↓
+Create Job
+   ↓
+Queue Job
+   ↓
+Return job_id
+
+and:
+
+Frontend
+   ↓
+Poll Status Endpoint
+   ↓
+queued
+processing
+complete
+failed
+
