@@ -1,0 +1,66 @@
+COLUMN_MAPPINGS = {
+
+    "date": [
+        "date",
+        "txn date",
+        "transaction date",
+        "value date"
+    ],
+
+    "narration": [
+        "narration",
+        "description",
+        "remarks",
+        "particulars",
+        "details"
+    ],
+
+    "transaction_id": [
+        "transaction id",
+        "txn id",
+        "utr",
+        "ref no",
+        "reference"
+    ],
+
+    "debit": [
+        "debit",
+        "withdrawal",
+        "withdraw"
+    ],
+
+    "credit": [
+        "credit",
+        "deposit"
+    ],
+
+    "balance": [
+        "balance",
+        "closing balance",
+        "available balance"
+    ]
+}
+
+def map_columns(
+    headers: list[str]
+):
+
+    mapping = {}
+
+    for header in headers:
+
+        normalized = (
+            header
+            .strip()
+            .lower()
+        )
+
+        for target, aliases in (
+            COLUMN_MAPPINGS.items()
+        ):
+
+            if normalized in aliases:
+
+                mapping[header] = target
+
+    return mapping

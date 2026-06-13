@@ -1,0 +1,936 @@
+# Fully Detailed Documentation
+
+## Conda env setup
+- ***nvidia-sim***
+Wed Jun 10 12:28:19 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 581.95                 Driver Version: 581.95         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4060 ...  WDDM  |   00000000:01:00.0 Off |                  N/A |
+| N/A   48C    P8              3W /   90W |     554MiB /   8188MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           11572    C+G   ....0.3967.96\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           12784    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A           15292    C+G   ...aude\app-1.11187.4\claude.exe      N/A      |
+|    0   N/A  N/A           16576    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A           16588    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           19404    C+G   ...lare WARP\Cloudflare WARP.exe      N/A      |
+|    0   N/A  N/A           19652    C+G   ...\SubAgent\AlienFXSubAgent.exe      N/A      |
+|    0   N/A  N/A           20812    C+G   ...5n1h2txyewy\TextInputHost.exe      N/A      |
+|    0   N/A  N/A           27036    C+G   ...aude\app-1.11187.4\claude.exe      N/A      |
+|    0   N/A  N/A           27056    C+G   ...8bbwe\PhoneExperienceHost.exe      N/A      |
+|    0   N/A  N/A           28656    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A           30256    C+G   ...1g1gvanyjgm\WhatsApp.Root.exe      N/A      |
+|    0   N/A  N/A           34040    C+G   ...yb3d8bbwe\WindowsTerminal.exe      N/A      |
+|    0   N/A  N/A           36904    C+G   ...cord\app-1.0.9240\Discord.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+- ***conda --version***
+conda 25.5.1
+
+## Step 1 — Create Environment
+***conda create -n finintel python=3.11 -y***
+Activate:
+***conda activate finintel***
+
+## Step 2 — Upgrade Pip
+python -m pip install --upgrade pip
+Verify:
+pip --version
+Step 3 — Install CUDA PyTorch
+
+Use the official CUDA 12.1 build:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+## Step 4 — Verify GPU Access
+Run:
+python
+Then:
+import torch
+print(torch.__version__)
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0))
+
+Expected:
+True
+NVIDIA GeForce RTX 4060 Laptop GPU
+
+## Step 5 — Install Core ML Stack
+Windows PowerShell alternative:
+pip install numpy pandas scikit-learn matplotlib seaborn jupyter ipykernel scipy
+
+## Step 6 — Install NLP Stack
+pip install spacy sentence-transformers transformers accelerate
+Then:
+python -m spacy download en_core_web_sm
+
+## Step 7 — Install OCR Stack
+pip install paddleocr
+For OpenCV:
+pip install opencv-python
+PDF tools:
+pip install pdfplumber camelot-py pypdf
+Excel:
+pip install openpyxl xlrd
+
+## Step 8 — Install Database Drivers
+pip install neo4j psycopg2-binary sqlalchemy
+
+## Step 9 — Install FastAPI Stack
+pip install fastapi uvicorn python-multipart httpx
+
+## Step 10 — Install Explainability Stack
+pip install shap
+
+## Step 11 — Install RAG Stack
+pip install langchain langchain-community faiss-cpu
+
+## Step 12 — Save Environment
+After everything is installed:
+conda env export > environment.yml
+This will allow the entire team to reproduce the environment instantly.
+
+## Step 13 — Install Rust
+For the backend:
+winget install Rustlang.Rustup
+Verify:
+rustc --version
+cargo --version
+
+# Phase 0: Infrastructure & Monorepo Setup
+Our goal is:
+Phase 0 Success Criteria
+
+✅ Monorepo created
+✅ Rust backend boots
+✅ Python services boot
+✅ PostgreSQL container runs
+✅ Neo4j container runs
+✅ Docker Compose starts everything
+✅ Health checks work
+✅ Service-to-service communication ready
+
+## Step 1: Project structure
+finintel/
+│
+├── backend/
+│
+├── ml-services/
+│   ├── ocr/
+│   ├── standardize/
+│   ├── entity/
+│   ├── anomaly/
+│   ├── temporal/
+│   ├── graph-ml/
+│   └── explainer/
+│
+├── frontend/
+├── graph-db/
+├── storage/
+├── scripts/
+├── docs/
+│
+├── docker-compose.yml
+├── .env
+└── README.md
+
+## Step 2: Initialize Rust Backend
+backend/
+├── Cargo.toml
+└── src/
+    └── main.rs
+
+- ***cargo init***
+
+## Step 3: Configure rust dependencies
+- backend/Cargo.toml
+
+## Step 4: Backend API Health Rust
+- backend/src/main.rs
+- Working Fine
+
+http://localhost:8080/health
+
+## Step 5: Python Service tempelate
+## Step 6: OCR Service
+ml-services/ocr/
+│
+├── main.py
+└── requirements.txt
+
+***uvicorn main:app --reload --port 8001***
+http://localhost:8001/health
+- Working Fine
+
+## Step 7: Create .env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=finintel
+
+POSTGRES_PORT=5432
+
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+
+NEO4J_HTTP_PORT=7474
+NEO4J_BOLT_PORT=7687
+
+## Step 8: Docker Compose 
+- ***docker compose up -d***
+- verify ***docker ps***
+- working fine
+finintel-postgres
+finintel-neo4j
+
+## Step 9: Create PostgreSQL Schema
+
+We want the database structure finalized before any ingestion code is written.
+scripts/
+└── init_postgres.sql
+
+## Step 10: Neo4j Constraints
+graph-db/
+└── constraints.cypher
+
+http://localhost:7474
+
+## Step 11: Shared services contract model
+ml-services/
+└── shared/
+    └── models.py
+
+## Step 12: Remaining microservices skeleton
+- standardize : port 8002
+- entity : port 8003
+- anomaly : 8004
+- temporal : 8005
+- graph ml : 8006
+- explainer : 8007
+
+## Step 13: Rust service registry
+backend/src/config/services.rs
+- Service Communication working fine
+
+finintel/
+│
+├── backend/
+│
+├── ml-services/
+│   │
+│   ├── shared/
+│   │   └── models.py
+│   │
+│   ├── ocr/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── standardize/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── entity/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── anomaly/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── temporal/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── graph-ml/
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   └── explainer/
+│       ├── main.py
+│       ├── requirements.txt
+│       └── Dockerfile
+│
+├── frontend/
+├── graph-db/
+├── storage/
+├── scripts/
+└── docker-compose.yml
+
+## Step 14: Test
+http://localhost:8080/services/health
+
+- all the services working and reported to rust
+{
+  "backend": {
+    "service": "finintel-backend",
+    "status": "healthy"
+  },
+  "services": {
+    "ocr": {
+      "service": "ocr",
+      "status": "healthy"
+    },
+    "standardize": {
+      "service": "standardize",
+      "status": "healthy"
+    },
+    "entity": {
+      "service": "entity",
+      "status": "healthy"
+    },
+    "anomaly": {
+      "service": "anomaly",
+      "status": "healthy"
+    },
+    "temporal": {
+      "service": "temporal",
+      "status": "healthy"
+    },
+    "graph_ml": {
+      "service": "graph_ml",
+      "status": "healthy"
+    },
+    "explainer": {
+      "service": "explainer",
+      "status": "healthy"
+    }
+  }
+}
+
+## Step 15: Refactoring the rust backend
+- Done
+src/
+│
+├── main.rs
+│
+├── config/
+│   ├── mod.rs
+│   └── services.rs
+│
+├── routes/
+│   ├── mod.rs
+│   └── health_routes.rs
+│
+├── handlers/
+│   ├── mod.rs
+│   └── health_handler.rs
+│
+├── services/
+│   ├── mod.rs
+│   └── service_checker.rs
+│
+├── models/
+│   ├── mod.rs
+│   └── health.rs
+│
+├── repositories/
+│   └── mod.rs
+│
+└── state/
+    ├── mod.rs
+    └── app_state.rs
+
+# Intermediate Chnages
+- Switched to SQLx Migration for better bacckend axum handling
+- backend structuree
+routes/
+│
+├── health_routes.rs
+└── statement_routes.rs
+
+handlers/
+│
+├── health_handler.rs
+└── statement_handler.rs
+
+models/
+│
+├── health.rs
+└── statement.rs
+
+repositories/
+│
+├── statements.rs
+└── mod.rs
+
+services/
+│
+├── service_checker.rs
+├── storage.rs
+└── mod.rs
+
+# Phase 1: Multi-Format Ingestion Pipeline
+By the end of Phase 1, this flow should work:
+
+Frontend
+   ↓
+Upload PDF/CSV/Image
+   ↓
+Rust Backend
+   ↓
+Validate File
+   ↓
+Store File
+   ↓
+Insert Statement Record
+   ↓
+Create Job
+   ↓
+Queue Job
+   ↓
+Return job_id
+
+and:
+
+Frontend
+   ↓
+Poll Status Endpoint
+   ↓
+queued
+processing
+complete
+failed
+
+- Just a bulletproof ingestion gateway
+
+## Step 1: Statement models
+- backend/src/models/statement.rs
+- models/mod.rs
+
+## Step 2: Queue Service
+- backend/src/services/queue.rs
+- services/mod.rs
+
+## Step 3: Storage Service
+backend/src/services/storage.rs
+Add dependency
+Cargo.toml
+anyhow = "1"
+
+## Step 4: Statement Repository
+- backend/src/repositories/statements.rs
+- repositories/mod.rs
+
+## Step 5: Upgrade AppState
+- state/app_state.rs
+
+## Step 6: Create Upload Route Skeleton
+- Create Upload Route Skeleton
+- routes/mod.rs
+
+## Step 7: Handler Skeleton
+- handlers/statement_handler.rs
+- handler/mod.rs
+
+## Step 8: Register Routes
+- main.rs
+
+## Testing
+http://localhost:8080/api/v1/statements/upload
+- Post working
+
+http://localhost:8080/api/v1/statements/123/status
+- get working
+
+## Phase 1: Real Upload Pipeline
+The placeholder:
+POST /api/v1/statements/upload
+
+Upload File
+    ↓
+Validate MIME Type
+    ↓
+Generate UUIDs
+    ↓
+Create Storage Directory
+    ↓
+Save File
+    ↓
+Insert Statement Record
+    ↓
+Create Processing Job
+    ↓
+Push Into Queue
+    ↓
+Return Response
+
+## Step 1: Add required dependencies
+- cargo.toml
+
+## Step 2: Create job status store
+- src/state/job_status.rs
+- // state/mod.rs
+
+## Step 3: Upgrade AppState
+- state/app_state.rs
+
+## Step 4: Create statement status model
+models/statement.rs
+
+## Step 5: Update statement repository
+
+## Step 6: Real Upload handler
+- handlers/statement_handler.rs
+
+## Step 7: Real Status Endpoint
+
+## Step 8: Create worker
+- services/worker.rs
+
+## Step 9: Initialize queue in main.rs
+
+## Step 10: Test 
+- cargo run
+    PostgreSQL Connected
+    Background Worker Started
+    FinIntel Backend running on http://localhost:8080
+
+
+post: http://localhost:8080/api/v1/statements/upload
+key : file -> file
+value -> upload document
+send
+Expected response:
+
+{
+  "job_id": "b4a3....",
+  "statement_id": "f7c2....",
+  "status": "queued"
+}
+
+- Verify File Storage
+
+After upload:
+
+Check:
+
+storage/
+└── statements/
+    └── <statement-id>/
+        └── sample.pdf
+
+Example:
+
+storage/statements/
+    f7c2f85d-...
+        sample.pdf
+
+- Verify PostgreSQL Insert
+
+Open PostgreSQL:
+
+docker exec -it finintel-postgres psql -U postgres -d finintel
+
+Run:
+
+SELECT * FROM statements;
+
+Expected:
+
+id
+filename
+bank_name
+status
+file_path
+upload_time
+
+You should see the uploaded file.
+
+- Verify Worker
+
+Look at the terminal where Rust is running.
+
+Expected:
+
+Processing statement: f7c2f85d-...
+
+If you see that:
+
+✅ Queue Works
+✅ Worker Works
+
+- Verify Status Endpoint
+
+Use the job_id returned from upload.
+
+Example:
+
+GET http://localhost:8080/api/v1/statements/b4a3.../status
+
+Expected:
+
+{
+  "job_id": "b4a3...",
+  "status": "queued",
+  "progress": 0,
+  "error": null
+}
+
+- Everything working fine perfectly
+
+## Endpoints
+Rust Backend
+
+In main.rs:
+
+let listener =
+    tokio::net::TcpListener::bind(
+        "0.0.0.0:8080"
+    )
+
+So the backend runs on:
+
+http://localhost:8080
+
+Endpoints:
+
+GET  http://localhost:8080/health
+
+GET  http://localhost:8080/test-ocr
+
+GET  http://localhost:8080/services/health
+
+POST http://localhost:8080/api/v1/statements/upload
+
+GET  http://localhost:8080/api/v1/statements/{job_id}/status
+Python OCR Service
+
+Started with:
+
+uvicorn main:app --reload --port 8001
+
+Runs on:
+
+http://localhost:8001
+
+Endpoint:
+
+GET  http://localhost:8001/health
+
+POST http://localhost:8001/extract
+Standardize Service
+uvicorn main:app --reload --port 8002
+
+Runs on:
+
+http://localhost:8002
+
+Endpoints:
+
+GET  http://localhost:8002/health
+
+POST http://localhost:8002/standardize
+Entity Service
+http://localhost:8003
+Anomaly Service
+http://localhost:8004
+Temporal Service
+http://localhost:8005
+Graph ML Service
+http://localhost:8006
+Explainer Service
+http://localhost:8007
+PostgreSQL
+
+Docker exposes:
+
+ports:
+  - "5432:5432"
+
+Connection:
+
+localhost:5432
+
+Connection string:
+
+postgres://postgres:postgres@localhost:5432/finintel
+Neo4j
+
+Browser UI:
+
+http://localhost:7474
+
+Bolt Protocol:
+
+bolt://localhost:7687
+
+## Current status
+Upload File
+     ↓
+Rust API
+     ↓
+Validate Request
+     ↓
+Store File
+     ↓
+Insert Statement Record
+     ↓
+Create Job
+     ↓
+Queue Job
+     ↓
+Worker Receives Job
+     ↓
+Status Endpoint
+
+## Improvements of phase 1
+1. MIME Type Validation
+Allow only:
+
+PDF
+CSV
+XLSX
+XLS
+DOCX
+PNG
+JPEG
+JPG
+
+Reject everything else.
+
+2. Bank Name Support
+Update Upload Endpoint
+The multipart request should support:
+file
+bank_name
+
+3. Status Lifecycle
+Current: queued only.
+Let's add:queued,processing,completed,failed
+
+4. Remove Dangerous unwrap()
+.expect("Useful Message")
+
+- **Phase 1 Completed: Everything working fine**
+
+# Phase 2: OCR & Intelligent Parsing Engine
+
+- Extraction Architecture
+Uploaded File
+      ↓
+Worker
+      ↓
+Parser Router
+      ↓
+┌──────────────┬──────────────┬──────────────┬──────────────┬──────────────┐
+│ PDF Parser   │ CSV Parser   │ Excel Parser │ DOCX Parser  │ Image Parser │
+└──────────────┴──────────────┴──────────────┴──────────────┴──────────────┘
+      ↓
+Raw Extracted Rows
+      ↓
+Field Detection
+      ↓
+Standardized Transactions
+      ↓
+PostgreSQL
+
+Uploaded File
+      ↓
+Worker
+      ↓
+Parser Router
+      ↓
+┌──────────────┬──────────────┬──────────────┬──────────────┬──────────────┐
+│ PDF Parser   │ CSV Parser   │ Excel Parser │ DOCX Parser  │ Image Parser │
+└──────────────┴──────────────┴──────────────┴──────────────┴──────────────┘
+      ↓
+Raw Extracted Rows
+      ↓
+Field Detection
+      ↓
+Standardized Transactions
+      ↓
+PostgreSQL
+
+and so onn
+
+## Step 1: Dependencies
+- ***pip install pdfplumber pandas openpyxl python-docx***
+
+## Step 2: OCR Structure
+ocr/
+│
+├── main.py
+│
+├── parsers/
+│   ├── __init__.py
+│   ├── parser_registry.py
+│   ├── pdf_parser.py
+│   ├── csv_parser.py
+│   ├── excel_parser.py
+│   ├── docx_parser.py
+│   └── image_parser.py
+│
+├── services/
+│   ├── __init__.py
+│   └── extraction_service.py
+│
+└── models/
+    ├── __init__.py
+    └── extraction_models.py
+
+## Step 3: Extraction models
+- models/extraction_models.py
+
+## Step 4: Multiformat parsers
+- parsers/pdf_parser.py etc
+- PDF
+- CSV
+- Excel
+- DOCX
+- Temporary Image parser
+
+## Step 5: Parser registry
+- parser/parser_registry.py
+
+## Step 6: Extraction Service
+- services/extraction_service.py
+
+## Step 7: OCR Endpoint
+- ocr/main.py
+
+## Test
+- uvicorn main:app --reload --port 8001
+http://localhost:8001/docs
+- upload the file path
+- working fine
+
+## Phase 2.2: OCR Integration
+Goal:
+
+Scanned PDF
+      ↓
+OCR
+      ↓
+Text
+      ↓
+Raw Rows
+
+and
+
+PNG/JPG
+      ↓
+OCR
+      ↓
+Text
+      ↓
+Raw Rows
+
+- we'll do proper ocr
+Image/PDF
+      ↓
+Preprocessing
+      ↓
+OCR
+      ↓
+Text Cleanup
+      ↓
+Raw Rows
+
+- What we have now:
+PDF
+ ↓
+Text Extraction
+
+Scanned PDF
+ ↓
+OCR
+
+PNG
+ ↓
+OCR
+
+JPEG
+ ↓
+OCR
+
+CSV
+ ↓
+Direct Parse
+
+Excel
+ ↓
+Direct Parse
+
+DOCX
+ ↓
+Direct Parse
+
+## Step 1: OCR Dependencies
+
+## Step 2: OCR Service layer
+
+## Step 3: OCR Service
+- services/ocr_service.py
+
+## Step 4: Image parser OCR
+
+## Step 5: Detect scanned pdf
+
+## Step 6: Create pdf ocr parser
+
+## Step 7: Update extraction service
+
+## Test
+- Both scanned and normal pdf getting extracted properly
+- Scanned images getting extracted properly
+
+## Phase 2.3: Standardize bank statement
+Convert:
+
+[
+    {
+        "Txn Date": "01/05/2025",
+        "Description": "UPI PAYMENT",
+        "Amount": "-500",
+        "Balance": "9500"
+    }
+]
+
+into:
+
+[
+    {
+        "date": "01/05/2025",
+        "narration": "UPI PAYMENT",
+        "transaction_id": None,
+        "debit": 500,
+        "credit": None,
+        "balance": 9500
+    }
+]
+
+## Step 1: standard transaction model
+- standardize/models/transaction.py
+
+## Step 2: Header detection engine
+- standardize/services/header_mapper.py
+
+## Step 3: Header mapper
+- standardize/services/header_mapper.py
+
+## Step 4: Row standardizer
+- standardize/services/row_standardizer.py
+
+## Step 5: Standardizer service
+- standardize/services/standardization_service.py
+
+- Complete 
+Somethings left
+- Enhancement of ocr intelligence
+- transaction quality filter
