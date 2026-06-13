@@ -22,7 +22,8 @@ import {
   Globe,
   RefreshCw,
   Activity,
-  FileCheck
+  FileCheck,
+  Check
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AnimatedGroup } from "@/components/ui/animated-group"
@@ -243,7 +244,7 @@ export function HeroSection() {
         
         {/* Ambient Radial Glows matching theme */}
         <div className="absolute top-[-100px] left-[-100px] w-[500px] h-[500px] bg-blue-900/20 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-100px] right-[-100px] w-[500px] h-[500px] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-100px] right-[-100px] w-[500px] h-[500px] bg-slate-900/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 rounded-full blur-[150px] pointer-events-none"></div>
 
         {/* Hero Section */}
@@ -255,7 +256,6 @@ export function HeroSection() {
               onClick={() => document.getElementById("scroll-story")?.scrollIntoView({ behavior: "smooth" })}
               className="mb-6 px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-full text-[11px] font-bold tracking-widest uppercase text-white/80 inline-flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-all shadow-md"
             >
-              <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span> 
               <span>Introducing AI-Powered Financial Crime Intelligence</span>
               <ChevronRight className="w-3.5 h-3.5 text-white/40" />
             </div>
@@ -368,12 +368,12 @@ export function HeroSection() {
             {/* Ingestion Scanning Overlay */}
             {isIngesting && (
               <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center font-mono">
-                <div className="max-w-md p-6 bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl text-center">
-                  <RefreshCw className="w-10 h-10 text-violet-500 animate-spin mx-auto mb-4" />
+                <div className="max-w-md p-6 bg-zinc-950 border border-white/10 rounded-lg shadow-xl text-center">
+                  <RefreshCw className="w-10 h-10 text-slate-400 animate-spin mx-auto mb-4" />
                   <h3 className="text-sm font-semibold text-zinc-200 mb-2">Ingesting Evidence Document</h3>
-                  <div className="text-xs text-zinc-400 bg-zinc-900 p-3 rounded border border-zinc-800 text-left space-y-1">
-                    <p className="text-violet-400">{ingestionStep}</p>
-                    <p className="text-zinc-600">Analyzing transaction nodes via Graph Neural Net...</p>
+                  <div className="text-xs text-zinc-400 bg-zinc-900 p-3 rounded border border-white/10 text-left space-y-1">
+                    <p className="text-slate-300">{ingestionStep}</p>
+                    <p className="text-zinc-650">Analyzing transaction nodes with structural heuristics...</p>
                   </div>
                 </div>
               </div>
@@ -477,7 +477,7 @@ export function HeroSection() {
                       activeTab === "copilot" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
                     )}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-violet-400" /> AI Investigator Copilot
+                    <Sparkles className="w-3.5 h-3.5 text-slate-400" /> AI Investigator Copilot
                   </button>
                   <button 
                     onClick={() => setActiveTab("report")}
@@ -733,8 +733,8 @@ export function HeroSection() {
                   
                   {/* Explanations checklist */}
                   <div className="mt-4 space-y-2.5">
-                    <div className="p-2 border border-violet-500/20 bg-violet-950/20 rounded flex gap-2">
-                      <CheckCircle className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+                    <div className="p-2 border border-white/10 bg-white/5 rounded flex gap-2">
+                      <CheckCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                       <div className="text-xs font-mono">
                         <p className="text-zinc-200 font-bold font-sans">Circular transaction detected</p>
                         <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Asset loop back to host Corp complete</p>
@@ -793,16 +793,15 @@ export function HeroSection() {
         {/* Scroll Story Telling Narrative Section */}
         <section id="scroll-story" className="relative z-10 mt-28 md:mt-40 max-w-7xl mx-auto px-6 space-y-36 pb-32">
           
-          {/* Section 1: Chaos to Intelligence */}
+          {/* Section 1: Fragments */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-5 space-y-6">
-              <span className="text-xs font-mono font-bold text-violet-400 tracking-widest uppercase block">// SECTION 01</span>
+              <span className="text-xs font-mono font-bold text-slate-400 tracking-widest uppercase block">// SECTION 01 // EVIDENCE</span>
               <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
-                Financial Crime Doesn't Hide in Plain Sight.
+                Financial Investigations Start With Fragments.
               </h2>
               <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
-                Investigators today are drowned in billions of unstructured bank statements, isolated crypto ledgers, and offshore registry pdf sheets. 
-                Sifting through records is a manual, human-error prone bottleneck. Traditional systems flag millions of alerts, but fail to tie disconnected evidence together.
+                Bank statements. PDFs. Spreadsheets. Transaction exports. Investigators rarely receive complete intelligence. They receive disconnected pieces of evidence. FinIntel transforms fragmented evidence into a connected investigation.
               </p>
               <div className="pt-2">
                 <Button 
@@ -814,223 +813,260 @@ export function HeroSection() {
                 </Button>
               </div>
             </div>
-            <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center shadow-2xl">
-              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">COMPLEXITY MATRIX // RAW DISCONNECTED DATA</div>
-              
-              <div className="grid grid-cols-3 gap-4 font-mono text-xs">
-                <div className="p-3 border border-white/10 bg-white/5 rounded space-y-1.5 hover:border-red-500/20 duration-150">
-                  <span className="text-red-400 text-[10px] font-bold block">• TRANSACTION VOLUMES</span>
-                  <span className="text-zinc-200 text-lg font-bold block">14,281,902</span>
-                  <span className="text-zinc-500 text-[9px] block">Unstandardized daily CSV wire entries.</span>
+            <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[340px] flex flex-col justify-between shadow-2xl">
+              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">WORKSPACE // COMILING DISCONNECTED EVIDENCE</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+                <div className="space-y-3">
+                  <div className="p-3.5 border border-white/10 bg-white/5 rounded-xl space-y-1 hover:border-slate-400/30 duration-200">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-zinc-300 font-bold">• bank_ledger.csv</span>
+                      <span className="text-[9px] text-zinc-500">14.2k items</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">Raw ledger of corporate bank wire entries; unstandardized formats.</p>
+                  </div>
+                  <div className="p-3.5 border border-white/10 bg-white/5 rounded-xl space-y-1 hover:border-slate-400/30 duration-200">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-zinc-300 font-bold">• cayman_registry.pdf</span>
+                      <span className="text-[9px] text-zinc-500">48 pgs</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">Disconnected offshore beneficial ownership files; scan artifacts.</p>
+                  </div>
                 </div>
-                <div className="p-3 border border-white/10 bg-white/5 rounded space-y-1.5 hover:border-red-500/20 duration-150">
-                  <span className="text-red-400 text-[10px] font-bold block">• DISCONNECTED RECORDS</span>
-                  <span className="text-zinc-200 text-lg font-bold block">92% Isolated</span>
-                  <span className="text-zinc-500 text-[9px] block">No linked beneficial tax registry.</span>
-                </div>
-                <div className="p-3 border border-white/10 bg-white/5 rounded space-y-1.5 hover:border-red-500/20 duration-150">
-                  <span className="text-red-400 text-[10px] font-bold block">• FALSE ALERTS</span>
-                  <span className="text-zinc-200 text-lg font-bold block">99.2% Rate</span>
-                  <span className="text-zinc-500 text-[9px] block">Clogs operations, hiding actual crime.</span>
+                <div className="space-y-3">
+                  <div className="p-3.5 border border-white/10 bg-white/5 rounded-xl space-y-1 hover:border-slate-400/30 duration-200">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-zinc-300 font-bold">• transfer_audits.xlsx</span>
+                      <span className="text-[9px] text-zinc-500">3 sheets</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">Excel exports of sub-ledger transfers and corresponding bank audits.</p>
+                  </div>
+                  <div className="p-3.5 border border-white/10 bg-white/5 rounded-xl space-y-1 hover:border-slate-400/30 duration-200">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-zinc-300 font-bold">• wallet_sign.json</span>
+                      <span className="text-[9px] text-zinc-500">45 txs</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">Fragmented node records and wallet signatures with no linked identity.</p>
+                  </div>
                 </div>
               </div>
               <div className="mt-6 p-3 bg-white/5 rounded border border-white/10 border-dashed text-xs text-zinc-400 font-sans text-center font-light">
-                FinIntel automatically converts this disparate noise into a continuous, deterministic relationship graph.
+                📊 FinIntel transforms fragmented evidence files, ingesting and structuring them into a deterministic connected workspace.
               </div>
             </div>
           </div>
 
-          {/* Section 2: Follow The Money */}
+          {/* Section 2: Flow Trail */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-7 lg:order-2 space-y-6">
-              <span className="text-xs font-mono font-bold text-violet-400 tracking-widest uppercase block">// SECTION 02</span>
+              <span className="text-xs font-mono font-bold text-slate-400 tracking-widest uppercase block">// SECTION 02 // EXTRACTION</span>
               <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
-                Follow The Money.
+                Every Transaction Leaves A Trail.
               </h2>
               <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
-                Our dynamic graph intelligence engine maps out flow connections in real-time. Accounts automatically resolve. 
-                Shell structures connect, entities crystallize, and circular loop clusters emerge right before your eyes. 
+                Money moves through accounts, entities, businesses, and intermediaries. FinIntel reconstructs these paths automatically and reveals connections that would otherwise remain hidden.
               </p>
               <div className="space-y-2 mt-4 font-mono text-xs">
-                <div className="flex items-center gap-3 text-zinc-300 py-1 border-b border-zinc-900">
-                  <span className="w-5 h-5 rounded bg-violet-950 text-violet-400 flex items-center justify-center font-bold">1</span>
-                  <span>Instant transaction ledger linking</span>
+                <div className="flex items-center gap-3 text-zinc-300 py-1.5 border-b border-zinc-900">
+                  <span className="w-5 h-5 rounded bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold">1</span>
+                  <span>Instant transaction ledger mapping</span>
                 </div>
-                <div className="flex items-center gap-3 text-zinc-300 py-1 border-b border-zinc-900">
-                  <span className="w-5 h-5 rounded bg-violet-950 text-violet-400 flex items-center justify-center font-bold">2</span>
-                  <span>Auto entity resolution (SEC/FATF sources)</span>
+                <div className="flex items-center gap-3 text-zinc-300 py-1.5 border-b border-zinc-900">
+                  <span className="w-5 h-5 rounded bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold">2</span>
+                  <span>Autonomous reconstruction of complex fund routes</span>
                 </div>
-                <div className="flex items-center gap-3 text-zinc-300 py-1 border-b border-zinc-900">
-                  <span className="w-5 h-5 rounded bg-violet-950 text-violet-400 flex items-center justify-center font-bold">3</span>
-                  <span>Interactive flow speed visualizers</span>
+                <div className="flex items-center gap-3 text-zinc-300 py-1.5 border-b border-zinc-900">
+                  <span className="w-5 h-5 rounded bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold">3</span>
+                  <span>Interactive transactional vector matching</span>
                 </div>
               </div>
             </div>
             <div className="lg:col-span-5 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-between lg:order-1 shadow-2xl">
-              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">GRAPH INTELLIGENCE // TRANSACTION VECTOR ANALYSIS</div>
+              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">GRAPH EXTRACTION // FUND FLOW SEQUENCE</div>
               
-              <div className="space-y-3 font-mono text-xs mt-4">
-                <div className="p-2 border border-white/10 rounded bg-black/40 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-zinc-450 flex items-center gap-1"><Building className="w-3.5 h-3.5" /> Apex LLC</span>
-                  <span className="text-zinc-500">➖➖ $1,200,000 Wires ➡️</span>
-                  <span className="text-[10px] font-bold text-red-400 flex items-center gap-1">Delta Cayman</span>
+              <div className="space-y-3 font-mono text-xs mt-6">
+                <div className="p-3 border border-white/10 rounded-xl bg-black/40 flex items-center justify-between hover:border-slate-400/20 duration-150">
+                  <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1"><Building className="w-3.5 h-3.5" /> Apex LLC</span>
+                  <span className="text-zinc-500 text-[9px]">➖➖ $1.20M Wire ➡️</span>
+                  <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1">Delta Cayman</span>
                 </div>
                 
-                <div className="p-2 border border-white/10 rounded bg-black/40 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-red-400 flex items-center gap-1">Delta Cayman</span>
-                  <span className="text-zinc-500">➖➖ $1,180,000 Layers ➡️</span>
-                  <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1">Vanguard Trading</span>
+                <div className="p-3 border border-white/10 rounded-xl bg-black/40 flex items-center justify-between hover:border-slate-400/20 duration-150">
+                  <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1">Delta Cayman</span>
+                  <span className="text-zinc-500 text-[9px]">➖➖ $1.18M Layer ➡️</span>
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">Vanguard Trading</span>
                 </div>
 
-                <div className="p-2 border border-white/10 rounded bg-black/40 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1">Vanguard Trading</span>
-                  <span className="text-zinc-500">➖➖ $1,150,000 Equity ➡️</span>
-                  <span className="text-[10px] font-bold text-zinc-450 flex items-center gap-1">Apex LLC</span>
+                <div className="p-3 border border-white/10 rounded-xl bg-black/40 flex items-center justify-between hover:border-slate-400/20 duration-150">
+                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">Vanguard Trading</span>
+                  <span className="text-zinc-500 text-[9px]">➖➖ $1.15M Equity ➡️</span>
+                  <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1">Apex LLC</span>
                 </div>
               </div>
 
               <div className="p-3 bg-white/5 rounded border border-white/10 text-xs text-zinc-300 font-sans text-center mt-6">
-                ⚡ Circular Money Loop flagged (Risk Severity 0.91). Total volume cycled: $1.20M USD.
+                🛡️ Closed round-tripping transfer loop fully mapped. Total volume of cycled capital: $1,200,000.
               </div>
             </div>
           </div>
 
-          {/* Section 3: See The Whole Network */}
+          {/* Section 3: Graph Intelligence Centerpiece */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-5 space-y-6">
-              <span className="text-xs font-mono font-bold text-violet-400 tracking-widest uppercase block">// SECTION 03</span>
+              <span className="text-xs font-mono font-bold text-slate-400 tracking-widest uppercase block">// SECTION 03 // RESOLUTION</span>
               <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
-                See The Whole Network.
+                See Relationships Hidden In Plain Sight.
               </h2>
               <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
-                FinIntel maps hidden relationships across jurisdictions. Uncover nominee directors, trace fiat to cryptocurrency off-ramps, detect smurfing mules, and monitor shell company holdings within a unified investigator terminal.
+                What appears to be isolated activity often belongs to a larger network. FinIntel resolves entities, links accounts, and uncovers suspicious structures across entire transaction ecosystems.
               </p>
               <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="p-3 border border-white/10 rounded-lg hover:bg-white/5 duration-150">
-                  <h4 className="text-xs font-mono font-bold text-zinc-300 uppercase">Shell Companies</h4>
-                  <p className="text-[11px] text-zinc-500 font-sans mt-1">Bearer tokens & nominal directories verified internally.</p>
+                <div className="p-3 border border-white/10 rounded-xl hover:bg-white/5 duration-150">
+                  <h4 className="text-xs font-mono font-bold text-zinc-300 uppercase">Entity Resolution</h4>
+                  <p className="text-[11px] text-zinc-500 font-sans mt-1">Cross-registers nominee directories against global corporate databases.</p>
                 </div>
-                <div className="p-3 border border-white/10 rounded-lg hover:bg-white/5 duration-150">
-                  <h4 className="text-xs font-mono font-bold text-zinc-300 uppercase">Mule Networks</h4>
-                  <p className="text-[11px] text-zinc-500 font-sans mt-1">Cross-reference deposits below CTR thresholds of $10,000.</p>
+                <div className="p-3 border border-white/10 rounded-xl hover:bg-white/5 duration-150">
+                  <h4 className="text-xs font-mono font-bold text-zinc-300 uppercase">Network Unfolding</h4>
+                  <p className="text-[11px] text-zinc-500 font-sans mt-1">Traces and exposes nested ultimate beneficial owners (UBO).</p>
                 </div>
               </div>
             </div>
-            <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[320px] flex flex-col justify-between shadow-2xl">
-              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">FORENSIC SUITE // NETWORK MAPPING OVERVIEW</div>
+            <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[380px] flex flex-col justify-between shadow-2xl">
+              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">FORENSIC TERMINAL // STRUCTURAL RELATIONSHIP GRAPH</div>
               
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 font-mono text-xs">
-                <div className="p-3.5 border border-white/10 rounded bg-black/55 text-center">
-                  <span className="text-xl">🇨🇾</span>
-                  <h5 className="font-bold text-zinc-200 mt-2">Cyprus</h5>
-                  <p className="text-[10px] text-zinc-500 mt-1">2 Holding Shells</p>
+              {/* Centerpiece SVG and Node Network Container */}
+              <div className="relative w-full h-[240px] mt-8 border border-white/5 bg-black/40 rounded-xl overflow-hidden">
+                <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                  {/* Connection lines representing resolved links */}
+                  <line x1="25%" y1="30%" x2="50%" y2="50%" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 4" />
+                  <line x1="75%" y1="30%" x2="50%" y2="50%" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 4" />
+                  <line x1="25%" y1="75%" x2="50%" y2="50%" stroke="#475569" strokeWidth="1.5" />
+                  <line x1="75%" y1="75%" x2="50%" y2="50%" stroke="#e2e8f0" strokeWidth="1.5" strokeOpacity="0.4" strokeDasharray="4 4" />
+                </svg>
+
+                {/* Nodes on top of connection lines */}
+                {/* Center Node: Delta Shell LTD (Cayman) */}
+                <div className="absolute left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 bg-zinc-950 border border-slate-400 p-2.5 rounded-lg text-center z-10 min-w-[120px] shadow-lg">
+                  <p className="text-[10px] font-mono font-bold text-white font-sans">Delta Shell LTD</p>
+                  <p className="text-[8px] text-slate-400 font-mono">Cayman Islands // Shell</p>
                 </div>
-                <div className="p-3.5 border border-white/10 rounded bg-black/55 text-center">
-                  <span className="text-xl">🇰🇾</span>
-                  <h5 className="font-bold text-zinc-200 mt-2">Cayman</h5>
-                  <p className="text-[10px] text-zinc-500 mt-1">1 Offsite Trust</p>
+
+                {/* Node Top Left: Apex Venture Corp (Holding) */}
+                <div className="absolute left-[8%] top-[15%] bg-zinc-950 border border-white/10 p-2 rounded-lg z-10 min-w-[100px] shadow-md">
+                  <p className="text-[9px] font-mono font-bold text-zinc-300 font-sans">Apex Venture Corp</p>
+                  <p className="text-[7.5px] text-zinc-500 font-mono">US Holdings LLC</p>
                 </div>
-                <div className="p-3.5 border border-red-500/25 rounded bg-red-950/10 text-center border-red-900/40">
-                  <span className="text-xl">🇸🇨</span>
-                  <h5 className="font-bold text-red-300 mt-2">Seychelles</h5>
-                  <p className="text-[10px] text-zinc-500 mt-1">1 Mixing Contract</p>
+
+                {/* Node Top Right: Vanguard Trading */}
+                <div className="absolute right-[8%] top-[15%] bg-zinc-950 border border-white/10 p-2 rounded-lg z-10 min-w-[100px] shadow-md">
+                  <p className="text-[9px] font-mono font-bold text-zinc-300 font-sans">Vanguard Trading</p>
+                  <p className="text-[7.5px] text-zinc-500 font-mono">Seychelles Corp</p>
                 </div>
-                <div className="p-3.5 border border-white/10 rounded bg-black/55 text-center">
-                  <span className="text-xl">🇵🇦</span>
-                  <h5 className="font-bold text-zinc-200 mt-2">Panama</h5>
-                  <p className="text-[10px] text-zinc-500 mt-1">3 Nominee Agent</p>
+
+                {/* Node Bottom Left: Carlos Santana (Student) */}
+                <div className="absolute left-[8%] top-[65%] bg-zinc-950 border border-white/10 p-2 rounded-lg z-10 min-w-[100px] shadow-md">
+                  <p className="text-[9px] font-mono font-medium text-zinc-300 font-sans">Carlos Santana</p>
+                  <p className="text-[7.5px] text-slate-400 font-mono">Mule Account #39281</p>
+                </div>
+
+                {/* Node Bottom Right: Sanctioned Mixer */}
+                <div className="absolute right-[8%] top-[65%] bg-zinc-950 border border-white/15 p-2 rounded-lg z-10 min-w-[100px] shadow-lg">
+                  <p className="text-[9px] font-mono font-bold text-zinc-300 font-sans">Privacy Mixer</p>
+                  <p className="text-[7.5px] text-slate-400 font-mono">Sanctioned Node ERC20</p>
                 </div>
               </div>
 
               <div className="p-3 bg-white/5 rounded border border-white/10 text-xs text-zinc-400 font-sans text-center mt-6">
-                Connected across 4 sovereign privacy jurisdictions to follow beneficial capital traces actively.
+                ✨ Mapped Ultimate Beneficial Ownership (UBO) structures across multiple nested shelf corporations.
               </div>
             </div>
           </div>
 
-          {/* Section 4: Explainable AI */}
+          {/* Section 4: Explainable Intelligence */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-7 lg:order-2 space-y-6">
-              <span className="text-xs font-mono font-bold text-violet-400 tracking-widest uppercase block">// SECTION 04</span>
-              <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
-                AI That Explains Itself.
-              </h2>
-              <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
-                We believe security models must never be black boxes. FinIntel doesn't just score transactions; it cites exact transaction references, points to exact regulatory files, and explains the forensic logic inside a beautifully formatted diagnostic briefing.
-              </p>
-              
-              <div className="p-4 border border-white/10 bg-[#0A0A0A] rounded-xl font-mono text-xs max-w-xl shadow-xl">
-                <div className="flex justify-between border-b border-white/10 pb-2 mb-2 text-[10px] text-zinc-500">
-                  <span>ANALYSIS CHIP // DELTA LOOP</span>
-                  <span>RISK SCORE: 0.91</span>
-                </div>
-                <div className="space-y-1 text-zinc-450">
-                  <p className="text-emerald-400 font-bold">✓ Loop alert: Circular transaction pattern confirmed</p>
-                  <p className="text-emerald-400 font-bold">✓ Speed alert: Hop propagation time below 48 hours</p>
-                  <p className="text-emerald-400 font-bold">✓ Owner alert: Cayman bearer company nominee director identified</p>
-                  <p className="text-red-400 font-bold">✗ Transaction block: Funds offshore switched to privacy mixer</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="lg:col-span-5 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center lg:order-1 shadow-2xl">
-              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">EXPLAINABILITY DIAGNOSTIC TERMINAL</div>
-              
-              <div className="p-4 bg-black border border-white/10 rounded-lg shadow-inner font-mono text-xs text-zinc-300">
-                <span className="text-violet-400 font-semibold">FinIntel_Model_v3.14_Audit:</span>
-                <p className="mt-2 text-zinc-400 font-sans font-light text-[11px] leading-relaxed">
-                  "Target account Carlos Santana resembles student nominee layout. 42 consecutive fiat deposits made physically below CTR limits ($9.5K median) constitute high probability structured smurfing to circumvent Bank Secrecy Act (BSA) compliance reporting."
+            <div className="lg:col-span-12 lg:grid lg:grid-cols-12 gap-12 items-center">
+              <div className="lg:col-span-7 lg:order-2 space-y-6">
+                <span className="text-xs font-mono font-bold text-slate-400 tracking-widest uppercase block">// SECTION 04 // EXPLAINABILITY</span>
+                <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
+                  Intelligence You Can Explain.
+                </h2>
+                <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
+                  Investigators need evidence, not black-box predictions. Every finding is supported by traceable relationships, transaction paths, and explainable reasoning.
                 </p>
-                <div className="mt-3 flex justify-between items-center text-[10px] text-zinc-500 border-t border-zinc-900 pt-2">
-                  <span>Confidence: 98.42%</span>
-                  <span>Class: Smurfing / Structuring</span>
+                
+                <div className="p-4 border border-white/10 bg-[#0A0A0A] rounded-xl font-mono text-xs max-w-xl shadow-xl space-y-3">
+                  <div className="flex justify-between border-b border-white/10 pb-2 text-[10px] text-zinc-500">
+                    <span>ANALYSIS OBSERVER // DELTA LOOP</span>
+                    <span>CONFIDENCE INDEX: 99.1%</span>
+                  </div>
+                  <div className="space-y-2 text-zinc-300">
+                    <p className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> Loop alert: Circular transaction pattern confirmed</p>
+                    <p className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> Speed alert: Hop propagation time below 48 hours</p>
+                    <p className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> Owner alert: Cayman bearer company nominee director resolved</p>
+                    <p className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-red-400/80" /> Jurisdictional swap: Funds offshore routed to sanctioned mixer</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="lg:col-span-5 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center lg:order-1 shadow-2xl">
+                <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">EXPLAINABILITY DIAGNOSTIC TERMINAL</div>
+                
+                <div className="p-4 bg-black border border-white/10 rounded-lg shadow-inner font-mono text-xs text-zinc-300">
+                  <span className="text-slate-300 font-semibold font-sans">FinIntel_Model_v3.14_Audit:</span>
+                  <p className="mt-2 text-zinc-400 font-sans font-light text-[11px] leading-relaxed">
+                    "Target account Carlos Santana resembles student nominee layout. 42 consecutive fiat deposits made physically below CTR limits ($9.5K median) constitute high probability structured smurfing to circumvent Bank Secrecy Act (BSA) compliance reporting."
+                  </p>
+                  <div className="mt-3 flex justify-between items-center text-[10px] text-zinc-500 border-t border-zinc-900 pt-2">
+                    <span>Confidence: 98.42%</span>
+                    <span>Class: Smurfing // Structuring</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Section 5: From Evidence to Report */}
+          {/* Section 5: Report Generation */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-5 space-y-6">
-              <span className="text-xs font-mono font-bold text-violet-400 tracking-widest uppercase block">// SECTION 05</span>
-              <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
-                From Evidence To Report.
-              </h2>
-              <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
-                Compile exhaustive, court-ready Suspicious Activity Reports (SARs) or compliance summaries in one click. 
-                Our system automates writing PDF briefings, maps complete money trails with vector graphs, compiles exact dates, times, and transaction hashes, and packages them for compliance officers and legal counsel instantly.
-              </p>
-              <div className="pt-2">
-                <Button 
-                  onClick={() => document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" })}
-                  className="bg-violet-600 hover:bg-violet-500 text-zinc-100 px-6 py-5 rounded-xl text-xs flex items-center gap-1.5 duration-200 cursor-pointer"
-                >
-                  <FileCheck className="w-4 h-4" /> Download Demo SARS Report (PDF)
-                </Button>
+            <div className="lg:col-span-12 lg:grid lg:grid-cols-12 gap-12 items-center">
+              <div className="lg:col-span-5 space-y-6">
+                <span className="text-xs font-mono font-bold text-slate-400 tracking-widest uppercase block">// SECTION 05 // REPORTING</span>
+                <h2 className="text-4xl md:text-5xl font-display font-medium text-balance tracking-tight leading-snug">
+                  From Investigation To Report.
+                </h2>
+                <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed font-sans">
+                  Generate investigation-ready reports with supporting evidence, relationship diagrams, transaction analysis, and executive summaries.
+                </p>
+                <div className="pt-2">
+                  <Button 
+                    onClick={() => document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" })}
+                    className="bg-white hover:bg-neutral-200 text-black px-6 py-5 rounded-xl text-xs flex items-center gap-1.5 duration-200 cursor-pointer font-semibold shadow-md"
+                  >
+                    <FileCheck className="w-4 h-4 text-black" /> Run Investigation Report (PDF)
+                  </Button>
+                </div>
               </div>
-            </div>
-            
-            <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-between shadow-2xl">
-              <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">SARS REPORT EXPORT PREVIEW</div>
               
-              <div className="border border-white/10 bg-black/80 rounded-lg p-4 font-mono text-xs text-zinc-400 space-y-3 mt-6">
-                <div className="flex justify-between items-center border-b border-white/10 pb-2 text-[10px]">
-                  <span className="font-bold text-zinc-200">FORM SAR-2026 // CASE REF #991</span>
-                  <span className="text-zinc-500">VERIFIED STATUS // EXPORT SUBMITTED</span>
+              <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-between shadow-2xl">
+                <div className="absolute top-2 left-2 text-[10px] font-mono text-zinc-500">OFFICIAL RECONSTRUCTION REPORT PREVIEW</div>
+                
+                <div className="border border-white/10 bg-black/80 rounded-lg p-5 font-mono text-xs text-zinc-400 space-y-3 mt-6">
+                  <div className="flex justify-between items-center border-b border-white/10 pb-2 text-[10px]">
+                    <span className="font-bold text-zinc-250">FORM SAR-2026 // INVESTIGATION CASE #991</span>
+                    <span className="text-zinc-500 font-semibold text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 border border-white/5">VERIFIED SUBMISSION READY</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px] font-sans">
+                    <p><b className="text-zinc-200 font-semibold font-sans">Executive Narrative Summary:</b> Traced anomalous asset round-tripping loop originating from Apex LLC US, layered through Seychelles Shell registries and bridged onto sanitized TRON digital mixer nodes.</p>
+                    <p><b className="text-zinc-200 font-semibold font-sans">Resolved Transaction Volume:</b> $1,200,000 USD primary wires; $450,000 crypto OTC integration swaps.</p>
+                    <p><b className="text-zinc-200 font-semibold font-sans">Linked Jurisdictions:</b> United States (origin), Cayman Islands, Seychelles, Panama.</p>
+                  </div>
+                  <div className="border-t border-white/10 pt-2 text-[9px] text-zinc-500 flex justify-between">
+                    <span>Generated by FinIntel Core Terminal Engine</span>
+                    <span>Standard Compliance Directives Met</span>
+                  </div>
                 </div>
-                <div className="space-y-1.5 text-[11px]">
-                  <p><b className="text-zinc-200">Executive Summary:</b> Apex Venture Corp money cycle traced across offshore trusts and TRON network mixers.</p>
-                  <p><b className="text-zinc-200">Flagged Wires Volume:</b> $1,200,000 USD (fiat), $450,000 swap OTC (USDT).</p>
-                  <p><b className="text-zinc-200">Jurisdictions Affected:</b> United States, Cayman Islands, Seychelles.</p>
-                </div>
-                <div className="border-t border-white/10 pt-2 text-[9px] text-zinc-500 flex justify-between">
-                  <span>Prepared by FinIntel Engine</span>
-                  <span>Compliance Officer Approved</span>
-                </div>
-              </div>
 
-              <div className="p-3 bg-white/5 rounded border border-white/10 text-xs text-zinc-400 font-sans text-center mt-6">
-                Our reports comply with FATF & BSA templates, minimizing compliance officers' paperwork overhead by up to 88%.
+                <div className="p-3.5 bg-white/5 rounded border border-white/10 text-xs text-zinc-400 font-sans text-center mt-6">
+                  Our official briefings map to professional regulatory filing specs, reducing reporting timelines from days to minutes.
+                </div>
               </div>
             </div>
           </div>
@@ -1135,7 +1171,7 @@ const HeroHeader = () => {
                 aria-label="home"
                 className="flex items-center space-x-2 text-zinc-100 font-display font-bold tracking-tight text-lg"
               >
-                <Logo className="text-violet-400" />
+                <Logo className="text-slate-400" />
                 <span className="font-semibold text-zinc-200 tracking-tight font-display">FinIntel</span>
               </a>
 
@@ -1177,7 +1213,7 @@ const HeroHeader = () => {
                       <a
                         href={item.href}
                         onClick={() => setMenuState(false)}
-                        className="text-zinc-300 hover:text-violet-400 block duration-150"
+                        className="text-zinc-300 hover:text-white block duration-150"
                       >
                         <span>{item.name}</span>
                       </a>
@@ -1242,8 +1278,8 @@ const Logo = ({ className }: { className?: string }) => {
           y2="22"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#a855f7" />
-          <stop offset="1" stopColor="#6366f1" />
+          <stop stopColor="#94a3b8" />
+          <stop offset="1" stopColor="#475569" />
         </linearGradient>
       </defs>
     </svg>
