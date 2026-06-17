@@ -1,7 +1,11 @@
 import { HeroSection } from "@/components/ui/hero-section-1"
 
-export function Demo () {
+interface DemoProps {
+  onEnter?: () => void;
+}
+
+export function Demo ({ onEnter }: DemoProps) {
   return (
-    <HeroSection />
+    <HeroSection onEnterPlatform={onEnter} />
   )
 }
