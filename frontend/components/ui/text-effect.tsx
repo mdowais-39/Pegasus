@@ -189,7 +189,7 @@ export function TextEffect({
         ...(containerVariants.visible as TargetAndTransition)?.transition,
         staggerChildren:
           (containerVariants.visible as TargetAndTransition)?.transition
-            ?.staggerChildren || stagger,
+          ?.staggerChildren || stagger,
         delayChildren: delay,
       },
     },
