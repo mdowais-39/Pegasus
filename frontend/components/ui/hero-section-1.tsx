@@ -182,8 +182,8 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
       country: "United States",
       flag: "🇺🇸",
       amount: "$1.20M USD",
-      x: 20,
-      y: 35,
+      x: 15,
+      y: 38,
       description: "US-registered LLC. Initiated Consultative SLA agreements sending $1.2M directly to Caribbean bank."
     },
     delta: {
@@ -206,8 +206,8 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
       country: "Seychelles",
       flag: "🇸🇨",
       amount: "$1.15M Equity",
-      x: 80,
-      y: 35,
+      x: 85,
+      y: 38,
       description: "Offshore trade agent. Re-routes funds back into US Venture LLC as 'Capital injections' to close laundering loop."
     },
     mule: {
@@ -218,8 +218,8 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
       country: "United States",
       flag: "🇺🇸",
       amount: "$390K Deposited",
-      x: 35,
-      y: 65,
+      x: 28,
+      y: 74,
       description: "Nominee mule node. Student holding account. 42 physical structured branch deposits made consecutively under $10K limit."
     },
     crypto: {
@@ -230,8 +230,8 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
       country: "Decentralized",
       flag: "🌐",
       amount: "USDT Swap Desks",
-      x: 65,
-      y: 65,
+      x: 72,
+      y: 74,
       description: "Smart contract linked to state-sanctioned digital asset mixing pools & token anonymizers."
     }
   };
@@ -318,13 +318,13 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
             {/* Ambient Background Grid for visualizer */}
             <div className="absolute inset-x-0 bottom-0 top-1/2 bg-gradient-to-t from-black/95 to-transparent pointer-events-none z-10" />
 
-            {/* App Header Controls */}
+            {/* Workspace Header Panel controls */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-5 border-b border-white/5 z-20 relative">
               <div className="flex items-center gap-3">
-                <div className="flex gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-zinc-700" />
-                  <span className="w-2 h-2 rounded-full bg-zinc-700" />
-                  <span className="w-2 h-2 rounded-full bg-zinc-700" />
+                <div className="flex gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#ff5f56] opacity-90" />
+                  <span className="w-3 h-3 rounded-full bg-[#ffbd2e] opacity-90" />
+                  <span className="w-3 h-3 rounded-full bg-[#27c93f] opacity-90" />
                 </div>
                 <div className="h-4 w-px bg-zinc-800" />
                 <span className="text-xs font-mono text-zinc-400">FININTEL CORE // WORKSPACE</span>
@@ -557,9 +557,9 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
 
                         {/* Paths with arrows */}
                         
-                        {/* 1. Apex (18, 35) -> Delta Shell (50, 20) */}
+                        {/* 1. Apex (13, 38) -> Delta Shell (50, 20) */}
                         <path 
-                          d="M18% 35% Q 34% 20% 50% 20%" 
+                          d="M13% 38% Q 31.5% 20% 50% 20%" 
                           fill="none" 
                           stroke="#475569" 
                           strokeWidth="1.5" 
@@ -567,9 +567,9 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                           markerEnd="url(#arrow-slate-custom)" 
                         />
                         
-                        {/* 2. Delta Shell (50, 20) -> Vanguard Seychelles (82, 35) */}
+                        {/* 2. Delta Shell (50, 20) -> Vanguard Seychelles (87, 38) */}
                         <path 
-                          d="M50% 20% Q 66% 20% 82% 35%" 
+                          d="M50% 20% Q 68.5% 20% 87% 38%" 
                           fill="none" 
                           stroke="#475569" 
                           strokeWidth="1.5" 
@@ -577,9 +577,9 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                           markerEnd="url(#arrow-slate-custom)" 
                         />
                         
-                        {/* 3. Vanguard Seychelles (82, 35) -> Apex Corp (18, 35) (CLOSED LOOP) */}
+                        {/* 3. Vanguard Seychelles (87, 38) -> Apex Corp (13, 38) (CLOSED LOOP) */}
                         <path 
-                          d="M82% 35% Q 50% 58% 18% 35%" 
+                          d="M87% 38% Q 50% 64% 13% 38%" 
                           fill="none" 
                           stroke="#d97706" 
                           strokeWidth="2" 
@@ -588,9 +588,9 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                           markerEnd="url(#arrow-gold-custom)" 
                         />
 
-                        {/* 4. Delta (50, 20) -> Crypto Mixer (65, 75) */}
+                        {/* 4. Delta (50, 20) -> Crypto Mixer (72, 84) */}
                         <path 
-                          d="M50% 20% Q 58% 48% 65% 75%" 
+                          d="M50% 20% Q 61% 52% 72% 84%" 
                           fill="none" 
                           stroke="#334155" 
                           strokeWidth="1.5" 
@@ -598,9 +598,9 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                           markerEnd="url(#arrow-slate-custom)" 
                         />
 
-                        {/* 5. Carlos Santana (35, 75) -> Apex Venture (18, 35) */}
+                        {/* 5. Carlos Santana (28, 84) -> Apex Venture (13, 38) */}
                         <path 
-                          d="M35% 75% Q 26% 55% 18% 35%" 
+                          d="M28% 84% Q 20.5% 61% 13% 38%" 
                           fill="none" 
                           stroke="#334155" 
                           strokeWidth="1.5" 
@@ -609,11 +609,11 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                         />
 
                         {/* Text labels on SVG paths */}
-                        <text x="32%" y="22%" fill="#94a3b8" fontSize="9" className="font-mono text-center" textAnchor="middle">$1.20M Wire Primary</text>
-                        <text x="68%" y="22%" fill="#94a3b8" fontSize="9" className="font-mono text-center" textAnchor="middle">$1.18M Structured Layers</text>
-                        <text x="50%" y="54%" fill="#d97706" fontSize="9" className="font-mono font-semibold text-center" textAnchor="middle">🔄 CLOSED ROUND-TRIP: $1.15M RECYCLED</text>
-                        <text x="60%" y="46%" fill="#64748b" fontSize="9" className="font-mono text-center" textAnchor="middle">$450K Token Transfer</text>
-                        <text x="25%" y="60%" fill="#64748b" fontSize="9" className="font-mono text-center" textAnchor="middle">$390K Physical Drops</text>
+                        <text x="31.5%" y="22%" fill="#94a3b8" fontSize="9" className="font-mono text-center" textAnchor="middle">$1.20M Wire Primary</text>
+                        <text x="68.5%" y="22%" fill="#94a3b8" fontSize="9" className="font-mono text-center" textAnchor="middle">$1.18M Structured Layers</text>
+                        <text x="50%" y="57%" fill="#d97706" fontSize="9" className="font-mono font-semibold text-center" textAnchor="middle">🔄 CLOSED ROUND-TRIP: $1.15M RECYCLED</text>
+                        <text x="63%" y="50%" fill="#64748b" fontSize="9" className="font-mono text-center" textAnchor="middle">$450K Token Transfer</text>
+                        <text x="22%" y="64%" fill="#64748b" fontSize="9" className="font-mono text-center" textAnchor="middle">$390K Physical Drops</text>
                       </svg>
 
                       {/* Node Entities */}
