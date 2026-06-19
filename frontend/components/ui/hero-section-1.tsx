@@ -1209,7 +1209,7 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
         <div className={cn(
           'mx-auto max-w-6xl transition-all duration-300 py-3 lg:py-4 px-6', 
           isScrolled 
-            ? 'bg-black/90 border border-white/10 max-w-4xl rounded-xl shadow-2xl shadow-black/80 backdrop-blur-md lg:px-6' 
+            ? 'bg-black/90 border border-white/10 max-w-[940px] rounded-xl shadow-2xl shadow-black/80 backdrop-blur-md lg:px-6' 
             : 'bg-transparent border-transparent lg:px-12'
         )}>
           <div className="relative flex flex-wrap items-center justify-between gap-6">
@@ -1239,7 +1239,7 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
             <div className="absolute inset-0 m-auto hidden size-fit lg:block">
               <ul className={cn(
                 "flex text-xs font-mono tracking-wider uppercase text-zinc-400 font-medium transition-all duration-300",
-                isScrolled ? "gap-4 lg:gap-5" : "gap-6 lg:gap-8"
+                isScrolled ? "gap-3 lg:gap-3.5" : "gap-6 lg:gap-8"
               )}>
                 {menuItems.map((item, index) => (
                   <li key={index}>
