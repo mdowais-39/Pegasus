@@ -11,7 +11,6 @@ import {
   Menu, 
   X, 
   Send, 
-  Sparkles, 
   Terminal, 
   FileSpreadsheet,
   CheckCircle,
@@ -279,7 +278,6 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                   onClick={onEnterPlatform}
                   className="w-full sm:w-auto px-8 py-6 bg-white text-black hover:bg-neutral-200 font-bold rounded-lg transition-all cursor-pointer text-sm shadow-xl flex items-center justify-center gap-1.5"
                 >
-                  <Sparkles className="w-4 h-4 text-black animate-pulse" />
                   <span>Launch Operations Center</span>
                   <ArrowRight className="w-4 h-4 text-black" />
                 </Button>
@@ -517,7 +515,7 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
                       activeTab === "copilot" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
                     )}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-zinc-400" /> Analyst Copilot
+                    Analyst Copilot
                   </button>
                   <button 
                     onClick={() => setActiveTab("report")}
@@ -1136,9 +1134,8 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
               {onEnterPlatform ? (
                 <Button 
                   onClick={onEnterPlatform}
-                  className="bg-white text-black hover:bg-neutral-200 px-8 py-6 rounded-xl text-sm font-bold shadow-lg shadow-white/5 cursor-pointer flex items-center gap-1.5"
+                  className="bg-white text-black hover:bg-neutral-200 px-8 py-6 rounded-xl text-sm font-bold shadow-lg shadow-white/5 cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  <Sparkles className="w-4 h-4 text-black" />
                   <span>Launch Operations Center</span>
                 </Button>
               ) : (
@@ -1210,10 +1207,10 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
         className="fixed z-40 w-full px-2 group mt-2"
       >
         <div className={cn(
-          'mx-auto max-w-6xl px-6 transition-all duration-300 lg:px-12 py-3 lg:py-4', 
+          'mx-auto max-w-6xl transition-all duration-300 py-3 lg:py-4 px-6', 
           isScrolled 
-            ? 'bg-black/90 border border-white/10 max-w-4xl rounded-xl shadow-2xl shadow-black/80 backdrop-blur-md' 
-            : 'bg-transparent border-transparent'
+            ? 'bg-black/90 border border-white/10 max-w-4xl rounded-xl shadow-2xl shadow-black/80 backdrop-blur-md lg:px-6' 
+            : 'bg-transparent border-transparent lg:px-12'
         )}>
           <div className="relative flex flex-wrap items-center justify-between gap-6">
             
@@ -1232,7 +1229,7 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
               <button
                 onClick={() => setMenuState(!menuState)}
                 aria-label={menuState ? 'Close Menu' : 'Open Menu'}
-                className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden text-zinc-300"
+                className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden text-zinc-350"
               >
                 {menuState ? <X className="size-6" /> : <Menu className="size-6" />}
               </button>
@@ -1240,7 +1237,10 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
 
             {/* Desktop Navigation Links */}
             <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-              <ul className="flex gap-8 text-xs font-mono tracking-wider uppercase text-zinc-400 font-medium">
+              <ul className={cn(
+                "flex text-xs font-mono tracking-wider uppercase text-zinc-400 font-medium transition-all duration-300",
+                isScrolled ? "gap-4 lg:gap-5" : "gap-6 lg:gap-8"
+              )}>
                 {menuItems.map((item, index) => (
                   <li key={index}>
                     <a
@@ -1275,21 +1275,8 @@ const HeroHeader = ({ onEnterPlatform }: { onEnterPlatform?: () => void }) => {
                 </ul>
               </div>
               <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-2.5 sm:space-y-0 md:w-fit mt-4 lg:mt-0 items-center">
-                {onEnterPlatform && (
-                  <Button
-                    onClick={onEnterPlatform}
-                    size="sm"
-                    className="w-full sm:w-auto rounded-xl bg-white text-black hover:bg-neutral-200 font-bold cursor-pointer text-xs transition px-4 py-2 flex items-center gap-1.5 shadow-md shadow-white/5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-black" />
-                    <span>Launch Console</span>
-                  </Button>
-                )}
                 <Button
-                  onClick={() => {
-                    setMenuState(false);
-                    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
-                  }}
+                  onClick={onEnterPlatform}
                   variant="outline"
                   size="sm"
                   className="w-full sm:w-auto rounded-xl border hover:bg-zinc-900 border-zinc-800 text-zinc-350 cursor-pointer text-xs"
