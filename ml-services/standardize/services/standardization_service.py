@@ -6,12 +6,22 @@ from services.row_standardizer import (
     standardize_row
 )
 
+from services.transaction_enricher import (
+    TransactionEnricher
+)
+
 
 class StandardizationService:
 
+    def __init__(self):
+
+        self.enricher = (
+            TransactionEnricher()
+        )
+
     def process(
         self,
-        rows,
+        rows
     ):
 
         if not rows:
@@ -31,11 +41,21 @@ class StandardizationService:
 
         for row in rows:
 
-            standardized.append(
+            canonical = (
                 standardize_row(
                     row,
                     mapping
                 )
+            )
+
+            enriched = (
+                self.enricher.enrich(
+                    canonical
+                )
+            )
+
+            standardized.append(
+                enriched
             )
 
         return standardized

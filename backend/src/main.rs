@@ -66,9 +66,10 @@ async fn main() {
         );
 
     // Start background worker
-    tokio::spawn(
-        start_worker(job_receiver)
-    );
+    tokio::spawn(start_worker(
+        job_receiver,
+        db.clone(),
+    ));
 
     println!(" Background Worker Started");
 

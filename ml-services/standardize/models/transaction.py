@@ -1,16 +1,26 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
-class Transaction(BaseModel):
+class StandardizedTransaction(
+    BaseModel):
 
-    date: str | None = None
+    date: Optional[str] = None
 
-    narration: str | None = None
+    amount: Optional[float] = None
 
-    transaction_id: str | None = None
+    txn_type: Optional[str] = None
 
-    debit: float | None = None
+    reference_number: Optional[str] = None
 
-    credit: float | None = None
+    narration: Optional[str] = None
 
-    balance: float | None = None
+    narration_normalized: Optional[str] = None
+
+    balance: Optional[float] = None
+
+    debit_credit: Optional[str] = None
+
+    platform: Optional[str] = None
+
+    upi_id: Optional[str] = None

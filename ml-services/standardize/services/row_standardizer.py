@@ -1,5 +1,5 @@
-from models.transaction import (
-    Transaction
+from models.canonical_transaction import (
+    CanonicalTransaction
 )
 
 
@@ -18,6 +18,6 @@ def standardize_row(
             source_col
         )
 
-    return Transaction(
+    return CanonicalTransaction(
         **data
     )

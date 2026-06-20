@@ -1,12 +1,20 @@
-use crate::models::statement::ProcessingJob;
+use crate::{
+    models::{
+        statement::ProcessingJob,
+        transaction::Transaction,
+    },
+    services::transaction_service::save_transactions,
+};
 
 use reqwest::Client;
 use serde_json::Value;
+use sqlx::PgPool;
 
 pub async fn start_worker(
     mut receiver: tokio::sync::mpsc::Receiver<
         ProcessingJob,
     >,
+    db: PgPool,
 ) {
     let client = Client::new();
 
@@ -110,6 +118,41 @@ pub async fn start_worker(
                                 &standardized_json
                             )
                             .unwrap()
+                        );
+
+                        // --------------------------------
+                        // Deserialize Transactions
+                        // --------------------------------
+
+                        let transactions:
+                            Vec<Transaction> =
+
+                            serde_json::from_value(
+                                standardized_json[
+                                    "transactions"
+                                ]
+                                .clone()
+                            )
+                            .unwrap_or_default();
+
+                        println!(
+                            "Parsed {} transactions",
+                            transactions.len()
+                        );
+
+                        // --------------------------------
+                        // Save Transactions
+                        // --------------------------------
+
+                        save_transactions(
+                            &db,
+                            job.statement_id,
+                            transactions,
+                        )
+                        .await;
+
+                        println!(
+                            "Transactions saved successfully"
                         );
 
                         println!(

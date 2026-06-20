@@ -59,7 +59,10 @@ def map_columns(
             COLUMN_MAPPINGS.items()
         ):
 
-            if normalized in aliases:
+            if any(
+                alias in normalized
+                for alias in aliases
+            ):
 
                 mapping[header] = target
 

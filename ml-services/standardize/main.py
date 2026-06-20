@@ -11,7 +11,7 @@ service = StandardizationService()
 
 
 class StandardizeRequest(BaseModel):
-    rows: list
+    rows: list[dict]
 
 
 @app.get("/health")
@@ -32,6 +32,7 @@ def standardize(
     )
 
     return {
+        "count": len(result),
         "transactions": [
             row.model_dump()
             for row in result
