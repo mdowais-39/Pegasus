@@ -10,33 +10,45 @@ use crate::{
 };
 
 pub async fn save_transactions(
-
     pool: &PgPool,
-
     statement_id: Uuid,
-
     txns: Vec<Transaction>,
-
 ) {
+    println!(
+        "Attempting to save {} transactions",
+        txns.len()
+    );
 
     for txn in txns {
+
+        println!(
+            "Saving txn: {:?}",
+            txn
+        );
 
         let raw_row =
             serde_json::json!({});
 
-        if let Err(err) =
-            insert_transaction(
-                pool,
-                statement_id,
-                &txn,
-                raw_row,
-            )
-            .await
+        match insert_transaction(
+            pool,
+            statement_id,
+            &txn,
+            raw_row,
+        )
+        .await
         {
-            println!(
-                "Transaction Save Error: {}",
-                err
-            );
+            Ok(_) => {
+                println!(
+                    "INSERT SUCCESS"
+                );
+            }
+
+            Err(err) => {
+                println!(
+                    "INSERT FAILED: {:?}",
+                    err
+                );
+            }
         }
     }
 }

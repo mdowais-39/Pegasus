@@ -46,6 +46,11 @@ async fn main() {
         std::env::var("DATABASE_URL")
             .expect("DATABASE_URL must be set");
 
+    println!(
+        "\nDATABASE_URL = {}\n",
+        database_url
+    );
+
     // Create PostgreSQL pool
     let db = PgPoolOptions::new()
         .max_connections(10)
@@ -54,6 +59,62 @@ async fn main() {
         .expect("Failed to connect to PostgreSQL");
 
     println!("PostgreSQL Connected");
+
+    // Current database
+    let db_name: (String,) =
+        sqlx::query_as(
+            "SELECT current_database()"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "CONNECTED DATABASE = {}",
+        db_name.0
+    );
+
+    // Current schema
+    let schema_name: (String,) =
+        sqlx::query_as(
+            "SELECT current_schema()"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "CURRENT SCHEMA = {}",
+        schema_name.0
+    );
+
+    // Existing statement count
+    let statement_count: (i64,) =
+        sqlx::query_as(
+            "SELECT COUNT(*) FROM statements"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "STATEMENTS IN DB = {}",
+        statement_count.0
+    );
+
+    // Existing transaction count
+    let transaction_count: (i64,) =
+        sqlx::query_as(
+            "SELECT COUNT(*) FROM transactions"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "TRANSACTIONS IN DB = {}",
+        transaction_count.0
+    );
 
     // Create queue
     let (job_sender, job_receiver) =
@@ -66,12 +127,14 @@ async fn main() {
         );
 
     // Start background worker
-    tokio::spawn(start_worker(
-        job_receiver,
-        db.clone(),
-    ));
+    tokio::spawn(
+        start_worker(
+            job_receiver,
+            db.clone(),
+        )
+    );
 
-    println!(" Background Worker Started");
+    println!("Background Worker Started");
 
     // Create application state
     let app_state = AppState {

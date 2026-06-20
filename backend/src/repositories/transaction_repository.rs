@@ -2,7 +2,7 @@ use sqlx::{
     PgPool,
 };
 use uuid::Uuid;
-
+use chrono::NaiveDate;
 use crate::models::transaction::Transaction;
 
 pub async fn insert_transaction(
@@ -57,7 +57,17 @@ pub async fn insert_transaction(
     .bind(Uuid::new_v4())
     .bind(statement_id)
 
-    .bind(&txn.date)
+    .bind(
+    txn.date
+        .as_ref()
+        .and_then(|d| {
+            NaiveDate::parse_from_str(
+                d,
+                "%Y-%m-%d"
+            )
+            .ok()
+        })
+)
 
     .bind(txn.amount)
 

@@ -934,3 +934,109 @@ into:
 Somethings left
 - Enhancement of ocr intelligence
 - transaction quality filter
+
+
+# Phase 3: Transaction Standardization & Entity Intelligence
+
+ml-services/
+└── standardize/
+    ├── main.py
+    ├── services/
+    │   ├── date_normalizer.py
+    │   ├── amount_normalizer.py
+    │   ├── narration_parser.py
+    │   └── standardization_service.py
+    └── models/
+        └── transaction.py
+
+Raw Transaction
+↓
+Header Mapping
+↓
+Canonical Transaction
+↓
+Date Normalization
+↓
+Amount Normalization
+↓
+Transaction Classification
+↓
+Standardized Transaction
+
+✅ Header Mapping
+✅ Row Standardization
+✅ Date Normalization
+✅ Amount Normalization
+✅ Transaction Classification
+
+## Phase 3.3A: Entity extraction service
+- localhost:8003
+
+## Step 1: Service structure
+- ml-services/entity/
+entity/
+│
+├── main.py
+│
+├── models/
+│   └── entity.py
+│
+└── services/
+    ├── entity_extractor.py
+    ├── upi_extractor.py
+    ├── account_extractor.py
+    ├── organization_extractor.py
+    └── bank_extractor.py
+
+Test payload:
+
+{
+  "transactions": [
+    {
+      "narration":
+      "UPI/rahul@ybl/PAYTM PAYMENT",
+
+      "reference_number":
+      "817716113199"
+    }
+  ]
+}
+
+{
+  "count": 3,
+  "entities": [
+    {
+      "entity_type": "UPI_ID",
+      "identifier": "rahul@ybl"
+    },
+    {
+      "entity_type": "ACCOUNT_NO",
+      "identifier": "817716113199"
+    },
+    {
+      "entity_type": "ORGANIZATION",
+      "identifier": "PAYTM"
+    }
+  ]
+}
+
+## Phase 3.3B: Entity Resolution
+- services/entity_resolver.py
+
+## Phase 3.3C: Advanced entity intelligence
+This is where we move beyond regex extraction and start identifying:
+
+PERSON
+ORGANIZATION
+MERCHANT
+BANK
+ACCOUNT
+UPI_ID
+
+from transaction narrations.
+
+- ml-services/entity/services/spacy_entity_extractor.py
+
+
+**DB connected to local postgres : psql -U postgres -h localhost -p 5432 -d finintel**
+

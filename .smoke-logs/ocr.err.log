@@ -1,0 +1,6 @@
+[33mNo model hoster is available! Please check your network connection to one of the following model hosts:
+HuggingFace (https://huggingface.co),
+ModelScope (https://modelscope.cn),
+AIStudio (https://aistudio.baidu.com), or
+BOS (https://paddle-model-ecology.bj.bcebos.com).
+Otherwise, only local models can be used.[0m
