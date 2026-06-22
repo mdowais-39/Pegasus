@@ -40,6 +40,11 @@ pub async fn insert_transaction(
             reference_number,
             debit_credit,
             platform,
+            is_duplicate,
+            is_failed,
+            is_valid,
+            confidence_score,
+            validation_notes,
 
             raw_row
 
@@ -49,7 +54,9 @@ pub async fn insert_transaction(
 
             $1,$2,$3,$4,$5,$6,
             $7,$8,$9,$10,$11,
-            $12,$13
+            $12,$13,
+            $14,$15,$16,$17,$18,
+            $19
 
         )
         "#
@@ -93,6 +100,20 @@ pub async fn insert_transaction(
 
     .bind(
         &txn.platform
+    )
+
+    .bind(txn.is_duplicate)
+
+    .bind(txn.is_failed)
+
+    .bind(txn.is_valid)
+
+    .bind(txn.confidence_score)
+
+    .bind(
+        serde_json::json!(
+            txn.validation_notes
+        )
     )
 
     .bind(raw_row)

@@ -36,4 +36,19 @@ pub struct Transaction {
 
     pub upi_id:
         Option<String>,
+
+    pub is_duplicate:
+        Option<bool>,
+
+    pub is_failed:
+        Option<bool>,
+
+    pub is_valid:
+        Option<bool>,
+
+    pub confidence_score:
+        Option<f64>,
+
+    pub validation_notes:
+        Option<Vec<String>>,
 }

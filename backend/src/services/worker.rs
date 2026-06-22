@@ -114,6 +114,10 @@ pub async fn start_worker(
 
                         println!(
                             "\n========== STANDARDIZED OUTPUT ==========\n{}",
+                        
+                            
+
+
                             serde_json::to_string_pretty(
                                 &standardized_json
                             )
@@ -121,35 +125,97 @@ pub async fn start_worker(
                         );
 
                         // --------------------------------
-                        // Deserialize Transactions
-                        // --------------------------------
+// Validation Service
+// --------------------------------
 
-                        let transactions:
-                            Vec<Transaction> =
+let validation_response =
+    client
+        .post(
+            "http://localhost:8004/validate"
+        )
+        .json(
+            &serde_json::json!({
+                "transactions":
+                    standardized_json[
+                        "transactions"
+                    ]
+            })
+        )
+        .send()
+        .await;
 
-                            serde_json::from_value(
-                                standardized_json[
-                                    "transactions"
-                                ]
-                                .clone()
-                            )
-                            .unwrap_or_default();
+match validation_response {
 
-                        println!(
-                            "Parsed {} transactions",
-                            transactions.len()
-                        );
+    Ok(resp) => {
 
-                        // --------------------------------
-                        // Save Transactions
-                        // --------------------------------
+        let validated_json: Value =
+            match resp.json().await {
 
-                        save_transactions(
-                            &db,
-                            job.statement_id,
-                            transactions,
-                        )
-                        .await;
+                Ok(data) => data,
+
+                Err(err) => {
+
+                    println!(
+                        "Failed to parse validation JSON: {}",
+                        err
+                    );
+
+                    continue;
+                }
+            };
+
+        println!(
+            "\n========== VALIDATION OUTPUT ==========\n{}",
+            serde_json::to_string_pretty(
+                &validated_json
+            )
+            .unwrap()
+        );
+
+        // --------------------------------
+        // Deserialize Transactions
+        // --------------------------------
+
+        let transactions:
+            Vec<Transaction> =
+
+            serde_json::from_value(
+                validated_json[
+                    "transactions"
+                ]
+                .clone()
+            )
+            .unwrap_or_default();
+
+        println!(
+            "Parsed {} validated transactions",
+            transactions.len()
+        );
+
+        // --------------------------------
+        // Save Transactions
+        // --------------------------------
+
+        save_transactions(
+            &db,
+            job.statement_id,
+            transactions,
+        )
+        .await;
+
+        println!(
+            "Validated transactions saved successfully"
+        );
+    }
+
+    Err(err) => {
+
+        println!(
+            "Validation Service Error: {}",
+            err
+        );
+    }
+}
 
                         println!(
                             "Transactions saved successfully"
