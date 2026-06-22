@@ -1040,3 +1040,387 @@ from transaction narrations.
 
 **DB connected to local postgres : psql -U postgres -h localhost -p 5432 -d finintel**
 
+## Phase 3.5: Service development - data validation
+ml-services/
+└── validation/
+    │
+    ├── main.py
+    │
+    ├── models/
+    │   └── validated_transaction.py
+    │
+    └── services/
+        ├── validation_service.py
+        ├── duplicate_detector.py
+        ├── failed_transaction_detector.py
+        └── balance_validator.py
+
+port 8004
+
+test:
+{
+  "transactions": [
+    {
+      "date": "2025-01-05",
+      "amount": 500,
+      "reference_number": "123"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": 500,
+      "reference_number": "123"
+    }
+  ]
+}
+
+- {
+  "is_duplicate": true
+}
+
+
+- working fine
+
+# Phase 4: Neo4j Graph Construction
+## Phase 4A
+## Step 1: verify neo4j
+- docker ps
+open: http://localhost:7474
+login: neo4j
+password
+
+## Step 2: structure
+ml-services/
+└── graph/
+    │
+    ├── main.py
+    │
+    └── services/
+        ├── neo4j_client.py
+        └── graph_builder.py
+
+## Step 4: neo4j client
+## Step 5: Graph builder
+## Step 6: API layer
+## Step 7: test
+- uvicorn main:app --reload --port 8005
+- http://localhost:8005/docs
+
+## Step 8: test with dataset
+using rows from money_flow_graph.csv
+
+## Step 9: verify graph
+in neo4j graph
+MATCH (n)
+RETURN n
+LIMIT 25
+- nodes visible
+
+MATCH (a)-[r]->(b)
+RETURN a,r,b
+LIMIT 25
+- edges visible
+
+## Phase 4B: Round trip detection
+## Phase 4B.1: Graph Aggregation
+
+update graph_builder
+- clear neo4j
+MATCH (n)
+DETACH DELETE n;
+
+- rebuiold graph:
+load master_investigation.csv
+through post/build-graph
+
+- verify node count
+MATCH (n)
+RETURN count(n)
+
+- verify relationship count
+MATCH ()-[r]->()
+RETURN count(r)
+
+- visual verification
+MATCH (a)-[r]->(b)
+RETURN a,r,b
+LIMIT 100
+
+- find most active account
+MATCH (a)-[r:TRANSFERRED_TO]->()
+RETURN
+a.id,
+SUM(r.transaction_count) AS txns,
+SUM(r.total_amount) AS amount
+ORDER BY amount DESC
+LIMIT 10
+
+- find biggest money receivers
+MATCH ()-[r:TRANSFERRED_TO]->(a)
+RETURN
+a.id,
+SUM(r.total_amount) AS received
+ORDER BY received DESC
+LIMIT 10
+
+- MATCH ()-[r:TRANSFERRED_TO]->()
+WHERE r.transaction_count > 1
+RETURN count(r)
+
+- MATCH ()-[r:TRANSFERRED_TO]->()
+RETURN
+MAX(r.transaction_count),
+AVG(r.transaction_count)
+
+
+## Phase 4C: Money flow analysis
+- ml-services/graph/services/money_flow_analyzer.py
+- GET /money-flow/ACC008
+
+Before Round Trip Detection
+
+I recommend we upgrade the Money Flow Analyzer first.
+
+Why?
+
+Because the problem statement says:
+
+Track how money flows from one account
+to multiple suspect accounts.
+
+Identify destination account where
+funds accumulate.
+
+That's literally Money Flow Analysis.
+
+## Phase 4C.1: Investigation Summary API
+- GET /investigation/account/{id}
+
+{
+  "account": "ACC050",
+
+  "total_outflow": 5304187,
+
+  "direct_receivers": 14,
+
+  "top_receivers": [
+    {
+      "account": "ACC065",
+      "amount": 544947
+    },
+    {
+      "account": "ACC046",
+      "amount": 490417
+    }
+  ],
+
+  "reachable_accounts": 63,
+
+  "accumulation_accounts_reached": [
+    "ACC082",
+    "ACC047",
+    "ACC011"
+  ]
+}
+
+## Step 1:
+- ml-services/graph/services/investigation_service.py
+- add endpoint
+{
+  "account": "ACC050",
+  "total_outflow": 5304187,
+  "total_inflow": 1287344,
+  "reachable_accounts": 73,
+
+  "top_receivers": [
+    {
+      "account": "ACC065",
+      "amount": 544947
+    }
+  ],
+
+  "top_senders": [
+    {
+      "account": "ACC011",
+      "amount": 300000
+    }
+  ]
+}
+
+- after some modifications:
+Result becomes
+
+{
+  "account": "ACC050",
+
+  "total_outflow": 5304187,
+
+  "total_inflow": 1849203,
+
+  "direct_receivers": 14,
+
+  "direct_senders": 10,
+
+  "top_receivers": [...],
+
+  "top_senders": [...]
+}
+
+=========================================================
+✅ Neo4j Graph Construction
+✅ Graph Aggregation
+✅ Investigation Account API
+✅ Money Flow Foundation
+
+- we already have
+Source Account
+↓
+Direct Receivers
+↓
+Top Receivers
+
+## Phase 4C: Accumulation Detection
+Given:
+ACC050
+ ↓
+ACC046
+ ↓
+ACC082
+
+If:
+ACC082
+received 5.7M
+from many accounts
+
+then:
+ACC082
+is an accumulation account.
+
+- ml-services/graph/services/accumulation_detector.py
+{
+  "accounts": [
+    {
+      "account": "ACC082",
+      "total_received": 5793659,
+      "sender_count": 14
+    },
+    {
+      "account": "ACC047",
+      "total_received": 5272035,
+      "sender_count": 12
+    }
+  ]
+}
+
+## Phase 4D: Round trip/ circular money movement detection
+- ml-services/graph/services/round_trip_detector.py
+- endpoint: round-trips
+
+Complete
+
+# Phase to complete requirements of the hackathon by judges: FIFO Money trail analysis
+
+| Txn | Type   | Amount | Balance |
+| --- | ------ | -----: | ------: |
+| T1  | CREDIT |  50000 |   60000 |
+| T2  | DEBIT  |  10000 |   50000 |
+| T3  | DEBIT  |  15000 |   35000 |
+| T4  | DEBIT  |   5000 |   30000 |
+
+
+Investigator asks:
+
+What happened to the 50,000 that came in?
+
+FIFO says:
+
+Credit(50,000)
+   ↓
+Debit(10,000)
+   ↓
+Debit(15,000)
+   ↓
+Debit(5,000)
+
+Remaining = 20,000
+
+- What The Problem Statement Wants
+
+When a credit amount is received, track how that money is spent until it reaches the previous balance.
+
+This means:
+
+Credit Event
+       ↓
+Follow subsequent debits
+       ↓
+Until credit exhausted
+
+
+ml-services/
+└── trail/
+    │
+    ├── main.py
+    │
+    ├── models/
+    │    └── trail_models.py
+    │
+    └── services/
+         └── fifo_tracker.py
+
+
+Now we have 3 independent engines:
+Engine 1 — Validation
+Duplicate
+Failed Transaction
+Balance Mismatch
+
+Stored in:
+
+transactions.is_duplicate
+transactions.is_failed
+transactions.is_valid
+validation_notes
+Engine 2 — Graph Intelligence
+Money Flow
+Accumulation
+Round Trip
+
+Stored in:
+
+Neo4j
+Engine 3 — FIFO Trail
+Credit
+ ↓
+Debit
+ ↓
+Debit
+
+Stored in:
+
+Trail Service
+
+"trails": [
+    {
+      "credit_amount": 50000,
+      "remaining": 0,
+      "consumed_by": [
+        {
+          "debit_amount": 11657
+        },
+        {
+          "debit_amount": 5425
+        },
+        {
+          "debit_amount": 11091
+        },
+        {
+          "debit_amount": 14241
+        },
+        {
+          "debit_amount": 7586
+        }
+      ]
+    },
+
+- working fine
+
