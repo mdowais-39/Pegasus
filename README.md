@@ -1,16 +1,5 @@
 <p align="center">
-  <img src="docs/assets/finintel-banner.png" alt="FinIntel — Turning Financial Evidence into Intelligence" width="100%" />
-</p>
-
-<p align="center">
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Rust 2021" /></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11" /></a>
-  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19" /></a>
-  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-ML_Services-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
-  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 16" /></a>
-  <a href="https://neo4j.com/"><img src="https://img.shields.io/badge/Neo4j-5-008CC1?style=flat-square&logo=neo4j&logoColor=white" alt="Neo4j 5" /></a>
-  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" /></a>
-  <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 6" /></a>
+  <img src="docs/assets/finintel-banner.png" alt="FinIntel — Turning Financial Evidence into Intelligence" width="720" />
 </p>
 
 <h1 align="center">FinIntel</h1>
