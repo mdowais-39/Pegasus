@@ -7,7 +7,6 @@ import {
   ShieldAlert, 
   Network, 
   ArrowRight, 
-  ChevronRight, 
   Menu, 
   X, 
   Send, 
@@ -247,20 +246,11 @@ export function HeroSection({ onEnterPlatform }: { onEnterPlatform?: () => void 
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 rounded-full blur-[150px] pointer-events-none"></div>
 
         {/* Hero Section */}
-        <section className="relative z-10 px-6 pt-16 mx-auto max-w-7xl md:pt-28">
-          <div className="flex flex-col items-center text-center">
-            
-            {/* Announcement Pill */}
-            <div 
-              onClick={() => document.getElementById("scroll-story")?.scrollIntoView({ behavior: "smooth" })}
-              className="mb-6 px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-full text-[11px] font-bold tracking-widest uppercase text-white/80 inline-flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-all shadow-md"
-            >
-              <span>Introducing AI-Powered Financial Crime Intelligence</span>
-              <ChevronRight className="w-3.5 h-3.5 text-white/40" />
-            </div>
+        <section className="relative z-10 px-6 mx-auto max-w-7xl min-h-[calc(100dvh-5rem)] flex items-center justify-center">
+          <div className="flex flex-col items-center text-center w-full py-12">
 
             {/* Massive Display Title with ultra bold font display and tight tracking */}
-            <h1 className="mt-8 font-display font-bold tracking-tighter text-balance text-5xl sm:text-6xl md:text-7xl lg:text-[76px] xl:text-[84px] text-white max-w-4xl leading-[0.95]">
+            <h1 className="font-display font-bold tracking-tighter text-balance text-5xl sm:text-6xl md:text-7xl lg:text-[76px] xl:text-[84px] text-white max-w-4xl leading-[0.95]">
               Turn Financial Evidence <br />
               Into <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/40">Intelligence.</span>
             </h1>
