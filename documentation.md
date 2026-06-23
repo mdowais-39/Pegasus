@@ -1919,4 +1919,42 @@ the total movement is suspicious.
         ]
       },
 
-3. 
+3. Structuring Detector
+Example:
+
+ACC050
+
+₹49,000
+₹49,000
+₹48,500
+₹49,500
+
+within short period
+instead of:
+
+₹196,000
+
+- working fine on **new aml master dataset**
+
+Current FinIntel Status
+Ingestion Layer
+PDF Upload          ✅
+CSV Upload          ✅
+Excel Upload        ✅
+OCR Pipeline        ✅
+Statement Parsing   ✅
+Processing Layer
+Standardization     ✅
+Validation          ✅
+Entity Resolution   ✅
+Storage Layer
+PostgreSQL          ✅
+Neo4j               ✅
+Investigation Layer
+Money Flow          ✅
+Round Trip          ✅
+Accumulation        ✅
+Intelligence Layer
+Statistical Engine  ✅
+Temporal Engine     ✅
+
