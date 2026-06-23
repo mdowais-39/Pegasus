@@ -1707,3 +1707,151 @@ check neo4j:
 integration working properly
 - upload statement -> check neo4j graph
 for both account and transaction
+
+
+====================================================================================================================
+
+# Phase 6: Statistical anomaly and temporal intelligence engine
+
+First:
+Anomaly Service V1
+
+Feature Builder
++
+Isolation Forest
++
+Stat Score API
+
+Next:
+Temporal Service V1
+
+Rapid Propagation
++
+Structuring
++
+Burst
+
+## Phase 6A: Statistical anomaly engine V1
+Transactions
+      ↓
+Feature Builder
+      ↓
+Isolation Forest
+      ↓
+Stat Score
+
+ml-services/
+└── anomaly/
+    ├── main.py
+    ├── models/
+    │   └── anomaly_result.py
+    └── services/
+        ├── feature_builder.py
+        ├── isolation_detector.py
+        └── anomaly_service.py
+
+
+{
+  "count": 6,
+  "results": [
+    {
+      "account": "ACC001",
+      "stat_score": 0.01843638364560475
+    },
+    {
+      "account": "ACC002",
+      "stat_score": 0.022451190038558434
+    },
+    {
+      "account": "ACC003",
+      "stat_score": 0
+    },
+    {
+      "account": "ACC004",
+      "stat_score": 0.20655140229690522
+    },
+    {
+      "account": "ACC005",
+      "stat_score": 0.21954550691116825
+    },
+    {
+      "account": "ACC099",
+      "stat_score": 0.9999999974828114
+    }
+  ]
+}
+
+## Integration with postgres directly
+3 Features:
+- load_latest_statement_transactions()
+- load_statement_transactions(statement_id)
+- load_account_transactions(account)
+
+
+**Test**
+test latest upload
+GET/anomaly/latest
+
+Get latest statement ID
+SELECT
+    id,
+    filename,
+    upload_time
+FROM statements
+ORDER BY upload_time DESC
+LIMIT 5;
+
+{
+  "count": 100,
+  "results": [
+    {
+      "account": "ACC008",
+      "stat_score": 0.5043089920402887,
+      "patterns": []
+    },
+    {
+      "account": "ACC031",
+      "stat_score": 0.5404359737197509,
+      "patterns": []
+    },
+    {
+      "account": "ACC038",
+      "stat_score": 0.36135105006036145,
+      "patterns": []
+    },
+    {
+      "account": "ACC088",
+      "stat_score": 0.07534671400411488,
+      "patterns": []
+    },
+
+test statement scoped
+GET /anomaly/statement/<statement_id>
+- same output
+
+Test account scoped
+SELECT
+    sender_account,
+    SUM(amount)
+FROM transactions
+GROUP BY sender_account
+ORDER BY SUM(amount) DESC
+LIMIT 10;
+
+- GET /anomaly/account/ACC050
+{
+  "account": "ACC012",
+  "stat_score": 0.9999999971657039,
+  "patterns": []
+}
+
+Fixed the patter issue 
+{
+  "account": "ACC061",
+  "stat_score": 0.25270537484939637,
+  "patterns": [
+    "high_transaction_frequency",
+    "high_counterparty_activity"
+  ]
+}
+
