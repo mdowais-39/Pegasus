@@ -1855,3 +1855,68 @@ Fixed the patter issue
   ]
 }
 
+## Temporal intelligence
+Temporal Intelligence
+
+1. Burst Activity
+2. Velocity Spike
+3. Structuring
+4. Rapid Propagation
+5. Dormancy Spike
+6. Night Activity
+
+1. Burst Activity
+Reason:
+
+Easy
+Fast
+Highly explainable
+Works on synthetic and real datasets
+
+Logic:
+For each account:
+txn_count(account)
+
+Compute:
+mean(txn_count)
+std(txn_count)
+
+Then:
+burst_score =
+(txn_count - mean)
+/
+std
+
+Accounts with large positive scores:
+burst_activity
+
+{
+  "account": "ACC050",
+  "temporal_score": 0.91,
+  "patterns": [
+    "burst_activity"
+  ]
+}
+
+2. Velocity Detector
+Example:
+ACC050
+
+Normal:
+₹50,000/day
+
+Suddenly:
+₹9,00,000/day
+Even if individual transactions aren't anomalous:
+10 × ₹90,000
+the total movement is suspicious.
+
+{
+        "account": "ACC010",
+        "velocity_score": 0.7004512515236324,
+        "patterns": [
+          "velocity_spike"
+        ]
+      },
+
+3. 
