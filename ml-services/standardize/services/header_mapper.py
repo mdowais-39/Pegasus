@@ -38,9 +38,40 @@ COLUMN_MAPPINGS = {
         "balance",
         "closing balance",
         "available balance"
+    ],
+
+    # --------------------------------
+    # Investigation Dataset Support
+    # --------------------------------
+
+    "sender_account": [
+        "sender",
+        "from_account",
+        "source_account"
+    ],
+
+    "receiver_account": [
+        "receiver",
+        "to_account",
+        "destination_account"
+    ],
+
+    "amount": [
+        "amount",
+        "transaction_amount"
+    ],
+
+    "bank_name": [
+        "bank",
+        "bank_name"
+    ],
+
+    "txn_type": [
+        
+        "txn_type",
+        "transaction_type"
     ]
 }
-
 def map_columns(
     headers: list[str]
 ):

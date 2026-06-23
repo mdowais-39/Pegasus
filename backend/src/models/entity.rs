@@ -9,8 +9,17 @@ use serde::{
     Deserialize,
 )]
 pub struct CanonicalEntity {
-    pub entity_type: String,
+
     pub canonical: String,
+
+    #[serde(default)]
     pub aliases: Vec<String>,
-    pub confidence: Option<f64>,
+
+    #[serde(default)]
+    pub entity_type:
+        Option<String>,
+
+    #[serde(default)]
+    pub confidence:
+        Option<f64>,
 }

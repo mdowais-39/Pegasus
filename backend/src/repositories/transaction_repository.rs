@@ -21,41 +21,48 @@ pub async fn insert_transaction(
         r#"
         INSERT INTO transactions (
 
-            id,
-            statement_id,
+    id,
+    statement_id,
 
-            date,
+    date,
 
-            amount,
+    sender_account,
+    receiver_account,
 
-            txn_type,
+    amount,
 
-            upi_id,
+    txn_type,
 
-            narration,
-            narration_normalized,
+    upi_id,
 
-            balance,
+    narration,
+    narration_normalized,
 
-            reference_number,
-            debit_credit,
-            platform,
-            is_duplicate,
-            is_failed,
-            is_valid,
-            confidence_score,
-            validation_notes,
+    balance,
 
-            raw_row
+    bank_name,
 
-        )
+    reference_number,
+    debit_credit,
+    platform,
+
+    is_duplicate,
+    is_failed,
+    is_valid,
+
+    confidence_score,
+    validation_notes,
+
+    raw_row
+)
 
         VALUES (
 
             $1,$2,$3,$4,$5,$6,
             $7,$8,$9,$10,$11,
             $12,$13,
-            $14,$15,$16,$17,$18
+            $14,$15,$16,$17,$18,
+            $19, $20, $21
 
         )
         "#
@@ -75,6 +82,14 @@ pub async fn insert_transaction(
         })
 )
 
+    .bind(
+    &txn.sender_account
+)
+
+.bind(
+    &txn.receiver_account
+)
+
     .bind(txn.amount)
 
     .bind(&txn.txn_type)
@@ -88,6 +103,10 @@ pub async fn insert_transaction(
     )
 
     .bind(txn.balance)
+
+    .bind(
+    &txn.bank_name
+)
 
     .bind(
         &txn.reference_number

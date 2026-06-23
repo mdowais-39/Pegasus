@@ -16,9 +16,15 @@ class GraphBuilder:
 
         for txn in transactions:
 
-            sender = txn["sender"]
+            sender = (
+                txn.get("sender_account")
+                or txn.get("sender")
+            )
 
-            receiver = txn["receiver"]
+            receiver = (
+                txn.get("receiver_account")
+                or txn.get("receiver")
+            )
 
             amount = txn["amount"]
 

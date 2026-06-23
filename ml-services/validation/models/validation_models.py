@@ -24,6 +24,20 @@ class ValidatedTransaction(BaseModel):
 
     upi_id: Optional[str] = None
 
+    # -------------------------
+    # Investigation Dataset
+    # -------------------------
+
+    sender_account: Optional[str] = None
+
+    receiver_account: Optional[str] = None
+
+    bank_name: Optional[str] = None
+
+    # -------------------------
+    # Validation Fields
+    # -------------------------
+
     is_duplicate: bool = False
 
     is_failed: bool = False

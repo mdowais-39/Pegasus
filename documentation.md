@@ -1424,3 +1424,286 @@ Trail Service
 
 - working fine
 
+
+=========================================================
+Next agreed roadmap:
+Graph Enrichment
+        ↓
+Temporal Intelligence
+        ↓
+Statistical Anomaly Detection
+        ↓
+Risk Fusion
+        ↓
+Explainable AI
+        ↓
+Reporting
+
+# Phase 5: Graph enrichment layer
+- Current graph
+(Account)
+    |
+TRANSFERRED_TO
+    |
+(Account)
+
+this is good for flow analysis but not good enough for:
+GNN
+Community Detection
+Shared Merchant Detection
+Hidden Networks
+
+Now we want:
+(Account)
+    |
+PERFORMED
+    |
+(Transaction)
+    |
+INVOLVES
+    |
+(Entity)
+
+ACC050
+    |
+PERFORMED
+    |
+TXN123
+    |
+INVOLVES
+    |
+PAYTM
+
+After enrichment neo4j will know:
+Money moved
+through PAYTM
+to HDFC
+using user@paytm
+via UPI
+
+## Phase 5A: entity graph enrichment
+- ml-services/graph/services/entity_graph_builder.py
+
+2things: - account graph
+         - transaction graph
+
+Long term integratio plan:
+Upload
+ ↓
+OCR
+ ↓
+Standardize
+ ↓
+Validate
+ ↓
+Save Transactions
+ ↓
+Entity Extraction
+ ↓
+Build Account Graph
+ ↓
+Build Entity Graph
+ ↓
+Graph Analytics
+ ↓
+Temporal Analysis
+ ↓
+Anomaly Detection
+ ↓
+Risk Fusion
+ ↓
+Explainable AI
+
+## Phase 5A.1: Statement metadata model for better entity graph creation
+
+## New phase: Connecting transaction to graph builder
+1. Connect Statement Pipeline → Graph Pipeline
+   (MOST IMPORTANT)
+
+2. Complete Investigation Knowledge Graph
+
+3. Temporal Intelligence
+
+4. Anomaly Detection
+
+5. Risk Fusion
+
+6. Explainable AI
+
+7. Reporting
+
+Upload Statement
+      ↓
+Transactions Saved In PostgreSQL
+      ❌
+      ❌ (currently stops here)
+      ❌
+Neo4j Investigation Graph
+      ↓
+Money Flow
+Round Trip
+Accumulation
+Risk Analysis
+
+we need:
+Upload Statement
+      ↓
+Transactions Saved
+      ↓
+Graph Builder
+      ↓
+Neo4j
+      ↓
+Investigation Engines
+
+- ml-services/graph/services/transaction_graph_builder.py
+
+========================================================
+originally: we built separately
+Round Trip Detector
+Money Flow Analyzer
+Accumulation Detector
+Money Trail Analyzer
+Entity Extraction
+Graph Builder
+
+                Upload
+                   ↓
+             OCR Pipeline
+                   ↓
+          Standardized Transactions
+                   ↓
+             PostgreSQL
+                   ↓
+                Neo4j
+                   ↓
+        Investigation Engines
+where: Round Trip
+Money Flow
+Money Trail
+Accumulation
+Risk Scoring
+Temporal Analysis
+
+all operate on the same data.
+
+Round Trip Detection
+Currently:
+GET /round-trips
+uses graph data.
+We keep it
+Later:
+Investigation Report
+will internally call:
+round_trip_detector.detect_cycles()
+and include findings automatically
+
+
+Future Investigation Engine
+Eventually we'll have:
+class InvestigationEngine:
+Internally:
+round_trip_results
+money_flow_results
+money_trail_results
+accumulation_results
+risk_results
+all get combined
+
+Example
+
+User uploads:
+
+master_investigation.csv
+
+System automatically:
+
+Build Graph
+Detect Cycles
+Find Beneficiaries
+Run Money Trail
+Extract Entities
+Calculate Risk
+
+and returns:
+
+{
+  "risk_score": 87,
+
+  "round_trips": [...],
+
+  "money_trails": [...],
+
+  "top_accumulation_accounts": [...],
+
+  "suspicious_entities": [...]
+}
+
+## Phase 5B: Integration of neo4j to worker.rs
+OCR
+ ↓
+Standardize
+ ↓
+Validate
+ ↓
+Save Transactions
+ ↓
+Extract Entities
+ ↓
+Save Entities
+ ↓
+Call Graph Service
+
+- user uploads statement.pdf
+backend automatically
+1. OCR
+2. Standardize
+3. Validate
+4. Store transactions
+5. Extract entities
+6. Store entities
+7. Build Neo4j graph
+8. Update investigation network
+
+**Test**
+upload:phase3_manual_smoke.csv
+OCR OUTPUT
+
+STANDARDIZED OUTPUT
+
+VALIDATION OUTPUT
+
+ENTITY OUTPUT
+
+Parsed 9 canonical entities
+
+Entities saved successfully
+
+GRAPH OUTPUT
+
+{
+  "status": "success"
+}
+
+**Verify Neo4j**
+- MATCH (t:Transaction)
+RETURN count(t);
+== 3
+
+-MATCH (e:Entity)
+RETURN count(e);
+==9
+
+-MATCH (t:Transaction)-[:INVOLVES]->(e:Entity)
+RETURN count(*);
+==9
+
+Upload: master_investigation.csv
+backend output same
+
+check neo4j:
+- 
+
+integration working properly
+- upload statement -> check neo4j graph
+for both account and transaction

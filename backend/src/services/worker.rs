@@ -2,8 +2,12 @@ use crate::{
     models::{
         statement::ProcessingJob,
         transaction::Transaction,
+        entity::CanonicalEntity,
     },
-    services::transaction_service::save_transactions,
+    services::{
+        transaction_service::save_transactions,
+        entity_service::save_entities,
+    },
 };
 
 use reqwest::Client;
@@ -172,6 +176,14 @@ match validation_response {
             .unwrap()
         );
 
+        println!(
+    "\nFIRST VALIDATED TXN:\n{}",
+    serde_json::to_string_pretty(
+        &validated_json["transactions"][0]
+    )
+    .unwrap()
+);
+
         // --------------------------------
         // Deserialize Transactions
         // --------------------------------
@@ -197,16 +209,223 @@ match validation_response {
         // --------------------------------
 
         save_transactions(
-            &db,
-            job.statement_id,
-            transactions,
+    &db,
+    job.statement_id,
+    transactions,
+)
+.await;
+
+println!(
+    "Validated transactions saved successfully"
+);
+
+// --------------------------------
+// Entity Extraction Service
+// --------------------------------
+
+let entity_response =
+    client
+        .post(
+            "http://localhost:8003/resolve"
         )
+        .json(
+            &serde_json::json!({
+                "transactions":
+                    validated_json[
+                        "transactions"
+                    ]
+            })
+        )
+        .send()
         .await;
 
+match entity_response {
+
+    Ok(resp) => {
+
+        let entity_json: Value =
+            match resp.json().await {
+
+                Ok(data) => data,
+
+                Err(err) => {
+
+                    println!(
+                        "Failed to parse entity JSON: {}",
+                        err
+                    );
+
+                    continue;
+                }
+            };
+
         println!(
-            "Validated transactions saved successfully"
+            "\n========== ENTITY OUTPUT ==========\n{}",
+            serde_json::to_string_pretty(
+                &entity_json
+            )
+            .unwrap()
+        );
+
+        let entities:
+            Vec<CanonicalEntity> =
+                serde_json::from_value(
+                    entity_json[
+                        "canonical_entities"
+                    ]
+                    .clone()
+                )
+                .unwrap_or_default();
+
+        println!(
+            "Parsed {} canonical entities",
+            entities.len()
+        );
+
+        save_entities(
+    &db,
+    entities,
+)
+.await;
+
+println!(
+    "Entities saved successfully"
+);
+
+// --------------------------------
+// Neo4j Graph Builder
+// --------------------------------
+
+// --------------------------------
+// Account Graph Builder
+// --------------------------------
+
+let account_graph_response =
+    client
+        .post(
+            "http://localhost:8005/build-graph"
+        )
+        .json(
+            &serde_json::json!({
+                "transactions":
+                    validated_json[
+                        "transactions"
+                    ]
+            })
+        )
+        .send()
+        .await;
+
+match account_graph_response {
+
+    Ok(resp) => {
+
+        let graph_json: Value =
+            match resp.json().await {
+
+                Ok(data) => data,
+
+                Err(err) => {
+
+                    println!(
+                        "Failed to parse account graph response: {}",
+                        err
+                    );
+
+                    continue;
+                }
+            };
+
+        println!(
+            "\n========== ACCOUNT GRAPH OUTPUT ==========\n{}",
+            serde_json::to_string_pretty(
+                &graph_json
+            )
+            .unwrap()
         );
     }
+
+    Err(err) => {
+
+        println!(
+            "Account Graph Error: {}",
+            err
+        );
+    }
+}
+
+let graph_response =
+    client
+        .post(
+            "http://localhost:8005/build-transaction-graph"
+        )
+        .json(
+            &serde_json::json!({
+
+                "transactions":
+                    validated_json[
+                        "transactions"
+                    ],
+
+                "entities":
+                    entity_json[
+                        "canonical_entities"
+                    ]
+            })
+        )
+        .send()
+        .await;
+
+match graph_response {
+
+    Ok(resp) => {
+
+        let graph_json: Value =
+            match resp.json().await {
+
+                Ok(data) => data,
+
+                Err(err) => {
+
+                    println!(
+                        "Failed to parse graph JSON: {}",
+                        err
+                    );
+
+                    continue;
+                }
+            };
+
+        println!(
+            "\n========== GRAPH OUTPUT ==========\n{}",
+            serde_json::to_string_pretty(
+                &graph_json
+            )
+            .unwrap()
+        );
+    }
+
+    Err(err) => {
+
+        println!(
+            "Graph Service Error: {}",
+            err
+        );
+    }
+}
+    }
+
+    Err(err) => {
+
+        println!(
+            "Entity Service Error: {}",
+            err
+        );
+    }
+}
+    }
+
+
 
     Err(err) => {
 

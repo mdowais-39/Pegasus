@@ -30,7 +30,14 @@ pub async fn upsert_entity(
         "#,
     )
     .bind(Uuid::new_v4())
-    .bind(&entity.entity_type)
+    .bind(
+    entity
+        .entity_type
+        .clone()
+        .unwrap_or_else(
+            || "UNKNOWN".to_string()
+        )
+)
     .bind(&entity.canonical)
     .bind(&entity.canonical)
     .bind(metadata)

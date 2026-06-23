@@ -39,6 +39,7 @@ class StandardizationService:
 
         standardized = []
 
+
         for row in rows:
 
             canonical = (
@@ -48,11 +49,20 @@ class StandardizationService:
                 )
             )
 
+            print("CANONICAL:", canonical.model_dump())
+
             enriched = (
                 self.enricher.enrich(
                     canonical
                 )
             )
+
+            print(
+    "ENRICHED:",
+    enriched.model_dump()
+)
+
+            
 
             standardized.append(
                 enriched

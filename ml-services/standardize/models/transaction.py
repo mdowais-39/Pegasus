@@ -3,7 +3,8 @@ from typing import Optional
 
 
 class StandardizedTransaction(
-    BaseModel):
+    BaseModel
+):
 
     date: Optional[str] = None
 
@@ -24,3 +25,13 @@ class StandardizedTransaction(
     platform: Optional[str] = None
 
     upi_id: Optional[str] = None
+
+    # -------------------------
+    # Investigation Dataset
+    # -------------------------
+
+    sender_account: Optional[str] = None
+
+    receiver_account: Optional[str] = None
+
+    bank_name: Optional[str] = None

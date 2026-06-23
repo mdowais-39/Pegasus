@@ -37,6 +37,15 @@ pub struct Transaction {
     pub upi_id:
         Option<String>,
 
+    pub sender_account:
+    Option<String>,
+
+    pub receiver_account:
+        Option<String>,
+
+    pub bank_name:
+        Option<String>,
+
     pub is_duplicate:
         Option<bool>,
 

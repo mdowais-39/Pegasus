@@ -19,6 +19,23 @@ from services.accumulation_detector import (
     AccumulationDetector
 )
 
+from services.entity_graph_builder import(
+    EntityGraphBuilder
+)
+
+from services.accumulation_detector import (
+    AccumulationDetector
+)
+
+from services.transaction_graph_builder import (
+    TransactionGraphBuilder
+)
+
+entity_builder = (
+    EntityGraphBuilder()
+)
+
+
 accumulation_detector = (
     AccumulationDetector()
 )
@@ -32,7 +49,21 @@ app = FastAPI()
 
 builder = GraphBuilder()
 
+txn_graph_builder = (
+    TransactionGraphBuilder()
+)
 
+class BuildEntityGraphRequest(
+    BaseModel
+):
+    transactions: list
+    entities: list
+
+class TransactionGraphRequest(
+    BaseModel
+):
+    transactions: list
+    entities: list
 class BuildGraphRequest(
     BaseModel
 ):
@@ -61,6 +92,31 @@ def build_graph(
         "status": "success",
         "nodes_loaded":
             len(request.transactions)
+    }
+
+@app.post(
+    "/build-entity-graph"
+)
+def build_entity_graph(
+    request:
+    BuildEntityGraphRequest
+):
+
+    entity_builder.build(
+        request.transactions,
+        request.entities
+    )
+
+    return {
+        "status": "success",
+        "transactions":
+            len(
+                request.transactions
+            ),
+        "entities":
+            len(
+                request.entities
+            )
     }
 
 @app.get("/round-trips")
@@ -127,4 +183,22 @@ def accumulation_accounts():
         "accounts":
             accumulation_detector
             .top_accumulation_accounts()
+    }
+
+@app.post(
+    "/build-transaction-graph"
+)
+def build_transaction_graph(
+    request:
+        TransactionGraphRequest
+):
+
+    txn_graph_builder.build(
+        request.transactions,
+        request.entities
+    )
+
+    return {
+        "status":
+            "success"
     }
