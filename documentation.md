@@ -1958,3 +1958,101 @@ Intelligence Layer
 Statistical Engine  ✅
 Temporal Engine     ✅
 
+# Phase 7: Restructuring the pipeline to fit the data
+1. Harden Investigation
+2. Update entity intelligence
+3. Upgrade graph intelligence
+4. Add risk fusion
+5. Add investigation layer
+6. Add reports
+
+Current pipeline
+Upload
+ ↓
+OCR
+ ↓
+Standardize
+ ↓
+Validate
+ ↓
+Entities
+ ↓
+Graph
+ ↓
+Statistics
+ ↓
+Temporal
+
+New changed:
+Upload
+ ↓
+OCR
+ ↓
+Statement Profile
+ ↓
+Standardize
+ ↓
+Validate
+ ↓
+Narration Intelligence
+ ↓
+Entity Intelligence
+ ↓
+Graph Intelligence
+ ↓
+Statistical Engine
+ ↓
+Temporal Engine
+ ↓
+Risk Fusion
+ ↓
+Investigation Report
+
+## Phase 7A: Data hardening
+## Step 1: Statement Profile Service
+
+OCR
+      ↓
+Statement Profile
+      ↓
+{
+    bank: SBI,
+
+    format: PDF,
+
+    header_row: 17,
+
+    transaction_start: 18,
+
+    transaction_end: 249,
+
+    metadata:
+    {
+        account_number: "...",
+        account_holder: "...",
+        ifsc: "...",
+        statement_period: "..."
+    }
+}
+
+- bank detection
+- document type
+- metadata
+- transaction header row
+- transaction start row
+- transaction end
+
+
+ml-services/
+└── statement-profile/
+    ├── main.py
+    ├── models/
+    │   └── statement_profile.py
+    ├── services/
+    │   ├── bank_detector.py
+    │   ├── metadata_extractor.py
+    │   ├── table_detector.py
+    │   └── profile_builder.py
+    └── requirements.txt
+
+    
