@@ -9,3 +9,13 @@ backend/target/
 # Python
 .venv/
 __pycache__/
+
+# KnowCode governance
+.agent/
+.knowcode/
+knowcode.md
+knowcode.log
+
+# CIDECODE Confidential Dataset
+datasets/bank-statements/Bank-statements-dataset/
+datasets/bank-statements/Bank-statements-dataset.zip
