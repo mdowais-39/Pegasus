@@ -2,6 +2,69 @@
   <img src="docs/assets/finintel-banner.png" alt="FinIntel — Turning Financial Evidence into Intelligence" width="720" />
 </p>
 
+<!-- TECH STACK -->
+<div align="center">
+
+### 🛠 Tech Stack
+
+<!-- Backend -->
+**Backend & Orchestration**
+
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Axum](https://img.shields.io/badge/Axum-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Tokio](https://img.shields.io/badge/Tokio-000000?style=for-the-badge&logo=rust&logoColor=white)
+![SQLx](https://img.shields.io/badge/SQLx-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Reqwest](https://img.shields.io/badge/Reqwest-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Serde](https://img.shields.io/badge/Serde-000000?style=for-the-badge&logo=rust&logoColor=white)
+
+<!-- ML & Analytics -->
+**ML & Analytics Services**
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white)
+![spaCy](https://img.shields.io/badge/spaCy-09A3D5?style=for-the-badge&logo=spacy&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)
+![Transformers](https://img.shields.io/badge/🤗_Transformers-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)
+![FAISS](https://img.shields.io/badge/FAISS-0066FF?style=for-the-badge&logo=facebook&logoColor=white)
+![SHAP](https://img.shields.io/badge/SHAP-6C5CE7?style=for-the-badge&logo=python&logoColor=white)
+![PaddleOCR](https://img.shields.io/badge/PaddleOCR-005BAC?style=for-the-badge&logo=paddlepaddle&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
+![Neo4j](https://img.shields.io/badge/Neo4j-4581C3?style=for-the-badge&logo=neo4j&logoColor=white)
+
+<!-- Frontend -->
+**Frontend**
+
+![React](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript_5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite_6-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![Radix UI](https://img.shields.io/badge/Radix_UI-161618?style=for-the-badge&logo=radixui&logoColor=white)
+![Framer Motion](https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router_DOM-CA4245?style=for-the-badge&logo=reactrouter&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+
+<!-- Infrastructure -->
+**Infrastructure & Data**
+
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Neo4j](https://img.shields.io/badge/Neo4j_5-4581C3?style=for-the-badge&logo=neo4j&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Conda](https://img.shields.io/badge/Conda-44A833?style=for-the-badge&logo=anaconda&logoColor=white)
+
+<!-- AI -->
+**AI & Intelligence**
+
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75FF?style=for-the-badge&logo=googlegemini&logoColor=white)
+
+</div>
+
+<!-- DIVIDER -->
+<br/>
+
 <h1 align="center">FinIntel</h1>
 
 <p align="center"><strong>Turning Financial Evidence into Intelligence</strong></p>
