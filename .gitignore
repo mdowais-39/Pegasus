@@ -27,3 +27,16 @@ node_modules/
 # OS
 Thumbs.db
 .DS_Store
+
+
+# KnowCode
+.agent/
+.knowcode/
+knowcode.log
+knowcode.md
+
+# Confidential datasets
+datasets/
+
+# Local frontend copy for backend-only development
+frontend/
