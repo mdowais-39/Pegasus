@@ -4,7 +4,16 @@ COLUMN_MAPPINGS = {
         "date",
         "txn date",
         "transaction date",
-        "value date"
+        "value date",
+        "txn_date",
+        "trans_date",
+        "trans date",
+        "tran-date",
+        "tran_date",
+        "gl. date",
+        "dat_txn_processing",
+        "dat_txn_value",
+        "dat_txn_posting",
     ],
 
     "narration": [
@@ -12,7 +21,12 @@ COLUMN_MAPPINGS = {
         "description",
         "remarks",
         "particulars",
-        "details"
+        "details",
+        "txn_particular",
+        "tran_particular",
+        "txt_txn_desc",
+        "txt_tran_particular",
+        "particular",
     ],
 
     "transaction_id": [
@@ -20,24 +34,45 @@ COLUMN_MAPPINGS = {
         "txn id",
         "utr",
         "ref no",
-        "reference"
+        "reference",
+        "chq_no",
+        "chq-no",
+        "chqno",
+        "chq/no",
+        "chq/ref no",
+        "instrmnt number",
+        "ref_txn_no",
+        "tran_id",
+        "chq number",
     ],
 
     "debit": [
         "debit",
         "withdrawal",
-        "withdraw"
+        "withdraw",
+        "dr",
+        "dr_amt",
+        "dr. amt",
+        "transaction debit amount",
+        "withdrawals",
     ],
 
     "credit": [
         "credit",
-        "deposit"
+        "deposit",
+        "cr",
+        "cr_amt",
+        "cr. amt",
+        "transaction credit amount",
+        "deposits",
     ],
 
     "balance": [
         "balance",
         "closing balance",
-        "available balance"
+        "available balance",
+        "bal",
+        "balance amount",
     ],
 
     # --------------------------------
@@ -47,31 +82,35 @@ COLUMN_MAPPINGS = {
     "sender_account": [
         "sender",
         "from_account",
-        "source_account"
+        "source_account",
     ],
 
     "receiver_account": [
         "receiver",
         "to_account",
-        "destination_account"
+        "destination_account",
     ],
 
     "amount": [
         "amount",
-        "transaction_amount"
+        "transaction_amount",
+        "amt_txn_lcy",
     ],
 
     "bank_name": [
         "bank",
-        "bank_name"
+        "bank_name",
     ],
 
     "txn_type": [
-        
         "txn_type",
-        "transaction_type"
-    ]
+        "transaction_type",
+        "cod_txn_mnemonic",
+        "tran_type",
+    ],
 }
+
+
 def map_columns(
     headers: list[str]
 ):
