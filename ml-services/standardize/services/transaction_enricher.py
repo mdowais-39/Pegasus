@@ -35,15 +35,32 @@ class TransactionEnricher:
         self,
         txn
     ):
-        
+
         # --------------------------------
-# Investigation Dataset Path
-# --------------------------------
+        # Investigation Dataset Path
+        # --------------------------------
 
         if (
             txn.sender_account
             or txn.receiver_account
         ):
+
+            amount_val = None
+            if txn.amount is not None:
+                try:
+                    amount_val = float(txn.amount)
+                except (ValueError, TypeError):
+                    amount_val = self.amount_norm.normalize(
+                        txn.amount
+                    )
+            elif txn.debit is not None:
+                amount_val = self.amount_norm.normalize(
+                    txn.debit
+                )
+            elif txn.credit is not None:
+                amount_val = self.amount_norm.normalize(
+                    txn.credit
+                )
 
             return StandardizedTransaction(
 
@@ -52,10 +69,7 @@ class TransactionEnricher:
                         txn.date
                     ),
 
-                amount=
-                    float(txn.amount)
-                    if txn.amount is not None
-                    else None,
+                amount=amount_val,
 
                 txn_type=
                     txn.txn_type,
@@ -84,6 +98,10 @@ class TransactionEnricher:
                 upi_id=None
             )
 
+        # --------------------------------
+        # Bank Statement Path
+        # --------------------------------
+
         parsed = (
             self.parser.parse(
                 txn.narration
@@ -102,16 +120,37 @@ class TransactionEnricher:
             )
         )
 
-        amount = (
-            debit
-            if debit is not None
-            else credit
-        )
+        # Determine amount and debit_credit
+        if debit is not None and credit is not None:
+            # Both present: prefer the larger one as amount
+            # but keep both for reference
+            amount = debit if debit > 0 else credit
+            if debit > 0:
+                debit_credit = "DEBIT"
+            else:
+                debit_credit = "CREDIT"
+        elif debit is not None:
+            amount = debit
+            debit_credit = "DEBIT"
+        elif credit is not None:
+            amount = credit
+            debit_credit = "CREDIT"
+        elif txn.amount is not None:
+            # Fallback to single amount field
+            amount = self.amount_norm.normalize(
+                txn.amount
+            )
+            debit_credit = None
+        else:
+            amount = None
+            debit_credit = None
 
-        debit_credit = (
-            "DEBIT"
-            if debit is not None
-            else "CREDIT"
+        # Normalize narration
+        narration_text = txn.narration or ""
+        narration_normalized = (
+            narration_text.lower().strip()
+            if narration_text
+            else None
         )
 
         return StandardizedTransaction(
@@ -133,7 +172,7 @@ class TransactionEnricher:
                 txn.narration,
 
             narration_normalized=
-                txn.narration,
+                narration_normalized,
 
             balance=
                 self.amount_norm.normalize(
@@ -147,5 +186,8 @@ class TransactionEnricher:
                 parsed["platform"],
 
             upi_id=
-                parsed["upi_id"]
+                parsed["upi_id"],
+
+            bank_name=
+                txn.bank_name
         )
