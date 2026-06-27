@@ -19,11 +19,16 @@ class ParserRegistry:
             ".xls": ExcelParser(),
 
             ".docx": DOCXParser(),
-
-            ".png": ImageParser(),
-            ".jpg": ImageParser(),
-            ".jpeg": ImageParser(),
         }
+
+        # Only load image parsers if OCR is available
+        try:
+            from parsers.image_parser import ImageParser
+            self.parsers[".png"] = ImageParser()
+            self.parsers[".jpg"] = ImageParser()
+            self.parsers[".jpeg"] = ImageParser()
+        except Exception:
+            pass
 
     def get_parser(
         self,
