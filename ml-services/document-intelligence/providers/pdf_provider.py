@@ -55,12 +55,12 @@ class PDFProvider(DocumentProvider):
                             pass
 
         for page_idx, page in enumerate(doc):
+            page_txs = []
             tables = page.find_tables()
             if tables and tables.tables:
                 for table in tables.tables:
                     raw_table_data = table.extract()
                     if raw_table_data and len(raw_table_data) > 1:
-                        # Keep None fields as placeholder col_i to match row lengths
                         headers = [str(cell).strip().lower() if cell is not None else f"col_{i}" for i, cell in enumerate(raw_table_data[0])]
                         header_keys = {"date", "desc", "narration", "particulars", "debit", "credit", "balance"}
                         matches = sum(1 for h in headers if any(key in h for key in header_keys))
@@ -70,13 +70,19 @@ class PDFProvider(DocumentProvider):
                                     row_dict = {}
                                     for i in range(len(headers)):
                                         row_dict[headers[i]] = str(row[i]).strip() if row[i] is not None else ""
-                                    transactions.append(row_dict)
-            else:
+                                    # Ensure row is not entirely empty
+                                    if any(row_dict.values()):
+                                        page_txs.append(row_dict)
+            
+            # If no rows extracted from tables, use line regex fallback
+            if not page_txs:
                 text = page.get_text()
                 lines = [line.strip() for line in text.split("\n") if line.strip()]
                 for line in lines:
-                    if re.search(r"\d{1,4}[-/.]\d{1,4}[-/.]\d{1,4}", line):
-                        transactions.append({"raw_text": line})
+                    if re.search(r"\d{1,4}[-/.]\d{1,4}[-/.]\d{1,4}", line) or re.search(r"\d{1,2}[-/.][a-zA-Z]{3}[-/.](?:\d{2}|\d{4})", line):
+                        page_txs.append({"raw_text": line})
+                        
+            transactions.extend(page_txs)
 
         if "bank_name" not in metadata:
             filename_lower = Path(file_path).name.lower()
