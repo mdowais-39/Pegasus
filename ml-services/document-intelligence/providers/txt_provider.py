@@ -50,7 +50,7 @@ class TXTProvider(DocumentProvider):
             for idx, line in enumerate(lines[:30]):
                 parts = [p.strip().lower() for p in line.split("\t")]
                 matches = sum(1 for p in parts if any(key in p for key in header_keys))
-                if matches >= 2:
+                if header_idx == -1 and matches >= 2:
                     header_idx = idx
                     break
             
@@ -77,15 +77,15 @@ class TXTProvider(DocumentProvider):
             if header_idx != -1:
                 header_line = lines[header_idx]
                 
-                # Detect column spans
+                # Detect column spans - sorting patterns by length descending
                 col_patterns = {
-                    "date": ["trans dt", "txn date", "date", "transn date"],
-                    "value_date": ["value dt", "value date", "val dt"],
-                    "transaction_id": ["transn id", "transaction id", "txn id", "trans.id", "ref"],
-                    "particulars": ["particulars", "transaction particulars", "narration", "description", "desc"],
+                    "date": ["trans dt", "txn date", "transn date", "date"],
+                    "value_date": ["value date", "value dt", "val dt"],
+                    "transaction_id": ["transaction id", "transn id", "txn id", "trans.id", "ref"],
+                    "particulars": ["transaction particulars", "particulars", "narration", "description", "desc"],
                     "cheque_number": ["ins number", "chq.no", "cheque", "instrument"],
-                    "debit": ["debit", "withdrawal", "withdrawals"],
-                    "credit": ["credit", "deposit", "deposits"],
+                    "debit": ["debit amount", "debit", "withdrawal", "withdrawals"],
+                    "credit": ["credit amount", "credit", "deposit", "deposits"],
                     "balance": ["balance"]
                 }
                 

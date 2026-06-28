@@ -212,9 +212,30 @@ class CanonicalMapper:
                 "transaction_particulars", "raw_text", "particular", "details", "transaction_details"
             ]) or ""
             
-            debit = self.parse_float(find_field(["debit", "withdrawal", "withdrawals", "amount_debit", "dr"]))
-            credit = self.parse_float(find_field(["credit", "deposit", "deposits", "amount_credit", "cr"]))
-            balance = self.parse_float(find_field(["balance", "bal", "running_balance"])) or 0.0
+            debit_raw = find_field(["debit", "withdrawal", "withdrawals", "amount_debit", "dr"])
+            credit_raw = find_field(["credit", "deposit", "deposits", "amount_credit", "cr"])
+            balance_raw = find_field(["balance", "bal", "running_balance"])
+
+            debit = self.parse_float(debit_raw)
+            credit = self.parse_float(credit_raw)
+            balance = self.parse_float(balance_raw)
+
+            # Column shift correction logic for fixed-width text statements (e.g., Kerala Gramin Bank)
+            if balance is None and debit is not None and credit is not None:
+                narration_lower = str(narration).lower()
+                if "cr" in narration_lower or "deposit" in narration_lower or "credit" in narration_lower or "by cash" in narration_lower:
+                    balance = credit
+                    credit = debit
+                    debit = None
+                elif "dr" in narration_lower or "withdrawal" in narration_lower or "debit" in narration_lower or "cwdr" in narration_lower or "dbtr" in narration_lower:
+                    balance = credit
+                    debit = debit
+                    credit = None
+                else:
+                    # Fallback to credit
+                    balance = credit
+                    credit = debit
+                    debit = None
 
             if debit is None and credit is None:
                 amount = self.parse_float(find_field(["amount", "txn_amount"]))
@@ -239,7 +260,7 @@ class CanonicalMapper:
                     cheque_number=str(cheque_number).strip() if cheque_number else None,
                     debit=debit,
                     credit=credit,
-                    balance=balance,
+                    balance=balance or 0.0,
                     transaction_type=tx_type,
                     source_bank=bank_name,
                     source_file=source_file,
