@@ -124,12 +124,25 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
                    "drcr"],
         "weak": ["type"],
     },
-    "account": {
-        "exact": ["account", "account no", "acct name", "account number",
-                  "ac no", "a c no", "sender account", "receiver account",
-                  "from account", "to account"],
-        "strong": ["account no", "account number", "acct", "ac no"],
+    "account": {   # statement holder's OWN account (metadata, not a counterparty)
+        "exact": ["account no", "account number", "ac no", "a c no",
+                  "account", "customer account", "acct no"],
+        "strong": ["account no", "account number", "a c no", "ac no"],
         "weak": ["account"],
+    },
+    "sender_account": {   # explicit remitter/source column (investigation data)
+        "exact": ["sender account", "from account", "source account",
+                  "remitter account", "payer account", "sender", "remitter"],
+        "strong": ["sender account", "from account", "source account",
+                   "remitter"],
+        "weak": ["sender"],
+    },
+    "receiver_account": {   # explicit beneficiary/destination column
+        "exact": ["receiver account", "to account", "destination account",
+                  "beneficiary account", "payee account", "receiver"],
+        "strong": ["receiver account", "to account", "destination account",
+                   "beneficiary account"],
+        "weak": ["receiver"],
     },
 }
 

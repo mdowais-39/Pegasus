@@ -30,13 +30,15 @@ def validate(
     request: ValidationRequest
 ):
 
-    result = service.process(
+    result, summary = service.process_with_summary(
         request.transactions
     )
 
     return {
 
         "count": len(result),
+
+        "summary": summary,
 
         "transactions": [
 

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -11,7 +13,11 @@ service = StandardizationService()
 
 
 class StandardizeRequest(BaseModel):
-    rows: list[dict]
+    # Tolerant by design: accept any list (or null). Non-dict entries (e.g.
+    # stray page text) are skipped by the service rather than 422-ing the whole
+    # upload, and a null/missing rows (upstream parser error) becomes an empty
+    # result instead of a cascading 422.
+    rows: Optional[list] = None
 
 
 @app.get("/health")
@@ -28,7 +34,7 @@ def standardize(
 ):
 
     result, meta = service.process_with_meta(
-        request.rows
+        request.rows or []
     )
 
     return {

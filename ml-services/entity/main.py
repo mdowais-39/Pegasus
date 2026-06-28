@@ -51,16 +51,25 @@ def entities(
         )
     )
 
+    # extractor returns one mention per occurrence; dedup for display
+    seen = {}
+    for entity in result:
+        key = (entity.entity_type, entity.identifier.upper())
+        if key not in seen:
+            seen[key] = entity
+
+    unique = list(seen.values())
+
     return {
 
         "count":
-            len(result),
+            len(unique),
 
         "entities": [
 
             entity.model_dump()
 
-            for entity in result
+            for entity in unique
         ]
     }
 

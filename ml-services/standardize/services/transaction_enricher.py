@@ -1,151 +1,57 @@
-from models.transaction import (
-    StandardizedTransaction
-)
-
-from services.date_normalizer import (
-    DateNormalizer
-)
-
-from services.amount_normalizer import (
-    AmountNormalizer
-)
-
-from services.narration_parser import (
-    NarrationParser
-)
+from models.transaction import StandardizedTransaction
+from services.date_normalizer import DateNormalizer
+from services.amount_normalizer import AmountNormalizer
+from services.narration_parser import NarrationParser
 
 
 class TransactionEnricher:
+    """
+    Single unified enrichment path for ALL statement types.
+
+    The previous implementation had a separate "investigation dataset" branch
+    that fired whenever a sender/receiver account was present and DISCARDED
+    narration, balance and debit/credit. Real bank statements carry all of
+    those, so that branch destroyed data. This version always populates every
+    field and additionally carries sender/receiver/bank when present.
+    """
 
     def __init__(self):
+        self.date_norm = DateNormalizer()
+        self.amount_norm = AmountNormalizer()
+        self.parser = NarrationParser()
 
-        self.date_norm = (
-            DateNormalizer()
-        )
+    def enrich(self, txn):
+        parsed = self.parser.parse(txn.narration)
 
-        self.amount_norm = (
-            AmountNormalizer()
-        )
+        debit = self.amount_norm.normalize(txn.debit)
+        credit = self.amount_norm.normalize(txn.credit)
 
-        self.parser = (
-            NarrationParser()
-        )
+        # Direction & amount from split debit/credit columns first.
+        if debit:
+            amount, direction = debit, "DEBIT"
+        elif credit:
+            amount, direction = credit, "CREDIT"
+        else:
+            # Fall back to an explicit single amount column (signed layouts).
+            amount = self.amount_norm.normalize(txn.amount)
+            direction = None
 
-    def enrich(
-        self,
-        txn
-    ):
-        
-        # --------------------------------
-# Investigation Dataset Path
-# --------------------------------
-
-        if (
-            txn.sender_account
-            or txn.receiver_account
-        ):
-
-            return StandardizedTransaction(
-
-                date=
-                    self.date_norm.normalize(
-                        txn.date
-                    ),
-
-                amount=
-                    float(txn.amount)
-                    if txn.amount is not None
-                    else None,
-
-                txn_type=
-                    txn.txn_type,
-
-                sender_account=
-                    txn.sender_account,
-
-                receiver_account=
-                    txn.receiver_account,
-
-                bank_name=
-                    txn.bank_name,
-
-                debit_credit=None,
-
-                narration=None,
-
-                narration_normalized=None,
-
-                reference_number=None,
-
-                balance=None,
-
-                platform=None,
-
-                upi_id=None
-            )
-
-        parsed = (
-            self.parser.parse(
-                txn.narration
-            )
-        )
-
-        debit = (
-            self.amount_norm.normalize(
-                txn.debit
-            )
-        )
-
-        credit = (
-            self.amount_norm.normalize(
-                txn.credit
-            )
-        )
-
-        amount = (
-            debit
-            if debit is not None
-            else credit
-        )
-
-        debit_credit = (
-            "DEBIT"
-            if debit is not None
-            else "CREDIT"
-        )
+        # Prefer narration-derived class (UPI/IMPS/NEFT/...) over a raw code.
+        ptype = parsed.get("txn_type")
+        txn_type = ptype if ptype and ptype != "UNCLASSIFIED" else txn.txn_type
 
         return StandardizedTransaction(
-
-            date=
-                self.date_norm.normalize(
-                    txn.date
-                ),
-
+            date=self.date_norm.normalize(txn.date),
             amount=amount,
-
-            txn_type=
-                parsed["txn_type"],
-
-            reference_number=
-                txn.transaction_id,
-
-            narration=
-                txn.narration,
-
-            narration_normalized=
-                txn.narration,
-
-            balance=
-                self.amount_norm.normalize(
-                    txn.balance
-                ),
-
-            debit_credit=
-                debit_credit,
-
-            platform=
-                parsed["platform"],
-
-            upi_id=
-                parsed["upi_id"]
+            txn_type=txn_type,
+            reference_number=txn.transaction_id,
+            narration=txn.narration,
+            narration_normalized=txn.narration,
+            balance=self.amount_norm.normalize(txn.balance, signed=True),
+            debit_credit=direction,
+            platform=parsed.get("platform"),
+            upi_id=parsed.get("upi_id"),
+            sender_account=txn.sender_account,
+            receiver_account=txn.receiver_account,
+            bank_name=txn.bank_name,
         )

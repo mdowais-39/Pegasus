@@ -64,6 +64,25 @@ CASES = [
      ["Txn Date", "Description", "Amount", "Balance"],
      {"date": "Txn Date", "narration": "Description", "amount": "Amount",
       "balance": "Balance"}),
+
+    # Wide bank export: holder ACCOUNT NO. must NOT become sender_account.
+    ("Wide CBS export (26 cols)",
+     ["ACCOUNT NO.", "TRAN DATE", "VALUE DATE", "TRAN PARTICULAR",
+      "INSTRUMENT NO", "DEBIT AMOUNT", "CREDIT AMOUNT", "BALANCE AMOUNT",
+      "BALANCE INDICATOR", "ACCOUNT NAME", "SOL ID", "TRAN ID", "TRAN AMT",
+      "TRAN TYPE", "TRAN SUB TYPE", "PART TRAN TYPE", "TRAN RMKS",
+      "BENEF/REMIT ACCT NO", "BENEF/REMIT ACCT NAME"],
+     {"account": "ACCOUNT NO.", "date": "TRAN DATE", "value_date": "VALUE DATE",
+      "narration": "TRAN PARTICULAR", "ref_no": "INSTRUMENT NO",
+      "debit": "DEBIT AMOUNT", "credit": "CREDIT AMOUNT",
+      "balance": "BALANCE AMOUNT"}),
+]
+
+# Headers that must NOT map to per-transaction sender/receiver fields.
+MUST_NOT_MAP = [
+    ("Wide CBS export (26 cols)",
+     ["ACCOUNT NO.", "ACCOUNT NAME", "BENEF/REMIT ACCT NAME"],
+     ["sender_account", "receiver_account"]),
 ]
 
 
@@ -93,6 +112,17 @@ def run():
             failures.append((label, detail))
         if res.unmapped:
             print(f"    unmapped: {res.unmapped}")
+    # Negative checks: holder/account-name headers must not become counterparties
+    for label, headers, forbidden in MUST_NOT_MAP:
+        res = resolve_columns(headers)
+        mapped_fields = set(res.mapping.values())
+        bad = [f for f in forbidden if f in mapped_fields]
+        if bad:
+            print(f"[FAIL] {label}: unexpectedly mapped {bad} from {headers}")
+            failures.append((label, [f"    mapped forbidden: {bad}"]))
+        else:
+            print(f"[PASS] {label}: no forbidden counterparty mapping")
+
     print()
     print(f"FIELD-LEVEL: {passed}/{total} correct")
     if failures:

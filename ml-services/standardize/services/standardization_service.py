@@ -10,7 +10,13 @@ mapping + confidence so the API can surface extraction quality to the frontend.
 
 from services.column_intelligence import resolve_columns
 from services.transaction_enricher import TransactionEnricher
+from services.amount_normalizer import AmountNormalizer
 from models.canonical_transaction import CanonicalTransaction
+
+
+# numeric model fields and whether their sign is meaningful (balance only)
+_NUMERIC_FIELDS = {"debit": False, "credit": False, "amount": False,
+                   "balance": True}
 
 
 # resolver canonical field -> CanonicalTransaction model field
@@ -23,8 +29,12 @@ RESOLVER_TO_MODEL = {
     "balance": "balance",
     "amount": "amount",
     "txn_type": "txn_type",
-    "account": "sender_account",
-    # value_date intentionally dropped (no model field yet)
+    "sender_account": "sender_account",
+    "receiver_account": "receiver_account",
+    # `account` (statement holder's own number) and `value_date` are intentionally
+    # NOT mapped to per-transaction fields — they are statement-level metadata.
+    # Mapping the holder account to sender_account previously triggered a
+    # data-discarding enricher branch.
 }
 
 
@@ -32,6 +42,7 @@ class StandardizationService:
 
     def __init__(self):
         self.enricher = TransactionEnricher()
+        self.amount_norm = AmountNormalizer()
 
     # -- public API -------------------------------------------------------
 
@@ -59,10 +70,14 @@ class StandardizationService:
 
         transactions = []
         for row in rows:
+            if not isinstance(row, dict):
+                continue  # skip stray non-dict rows (e.g. raw page text)
             canonical = self._build_canonical(row, resolved)
             enriched = self.enricher.enrich(canonical)
             transactions.append(enriched)
 
+        meta["rows_in"] = len(rows)
+        meta["rows_standardized"] = len(transactions)
         return transactions, meta
 
     # -- internals --------------------------------------------------------
@@ -85,24 +100,34 @@ class StandardizationService:
                 continue
             data[model_field] = row.get(source_col)
 
-        # Signed single-amount layout: derive debit/credit from the sign so the
-        # downstream enricher (which expects debit/credit) behaves uniformly.
-        if resolved.amount_mode == "signed" and data.get("amount") is not None:
-            amt = self._to_float(data.get("amount"))
-            if amt is not None:
+        # Normalize numeric fields BEFORE constructing the float-typed model,
+        # so values like "5,389.38Cr" / "(500.00)" / "₹1,200" become floats
+        # instead of crashing pydantic. Balance keeps its sign (Dr/overdraft).
+        for fld in ("debit", "credit", "balance"):
+            if fld in data:
+                signed = _NUMERIC_FIELDS[fld]
+                data[fld] = self.amount_norm.normalize(data[fld], signed=signed)
+
+        # A literal 0 in a split debit/credit column means "no movement on this
+        # side" (the other column carries the amount). Treat it as absent so the
+        # enricher selects the correct side instead of a phantom 0 debit.
+        for fld in ("debit", "credit"):
+            if data.get(fld) == 0:
+                data[fld] = None
+
+        # Single signed-amount layout: keep the sign to derive direction, then
+        # split into debit/credit so the downstream enricher behaves uniformly.
+        if "amount" in data:
+            signed_mode = resolved.amount_mode == "signed"
+            amt = self.amount_norm.normalize(data["amount"], signed=signed_mode)
+            data["amount"] = amt
+            if signed_mode and amt is not None:
                 if amt < 0:
                     data["debit"] = abs(amt)
                 else:
                     data["credit"] = amt
 
         return CanonicalTransaction(**data)
-
-    @staticmethod
-    def _to_float(value):
-        try:
-            return float(str(value).replace(",", "").replace("₹", "").strip())
-        except Exception:
-            return None
 
     @staticmethod
     def _empty_meta():

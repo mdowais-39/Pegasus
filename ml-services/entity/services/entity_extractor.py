@@ -1,228 +1,109 @@
+"""
+EntityExtractor — extract typed entities from transaction narration/reference.
+
+Entity types: UPI_ID, IFSC, BANK, ACCOUNT_NO, PHONE, PERSON, MERCHANT,
+ORGANIZATION. Returns ALL mentions (one Entity per occurrence) so the resolver
+can aggregate occurrence counts and aliases; the /entities endpoint dedups for
+display.
+
+spaCy NER is optional: if the model isn't installed the service still runs
+(graceful degradation) using the deterministic extractors below.
+"""
+
+import re
+
 from models.entity import Entity
 
-from services.upi_extractor import (
-    UPIExtractor
-)
+from services.upi_extractor import UPIExtractor
+from services.ifsc_extractor import IFSCExtractor
+from services.phone_extractor import PhoneExtractor
+from services.account_extractor import AccountExtractor
+from services.bank_extractor import BankExtractor
+from services.organization_extractor import OrganizationExtractor
+from services.merchant_extractor import MerchantExtractor
+from services.person_extractor import PersonExtractor
 
-from services.account_extractor import (
-    AccountExtractor
-)
 
-from services.bank_extractor import (
-    BankExtractor
-)
-
-from services.organization_extractor import (
-    OrganizationExtractor
-)
-
-from services.merchant_extractor import (
-    MerchantExtractor
-)
-
-from services.person_extractor import (
-    PersonExtractor
-)
-
-from services.spacy_entity_extractor import (
-    SpacyEntityExtractor
-)
+def _is_valid_name(text: str) -> bool:
+    """
+    Reject spaCy 'names' that are really transaction codes/narration fragments
+    (e.g. 'UPI/515040414268/DR'). A real person/org name has letters, no
+    slashes/@, and no long digit runs.
+    """
+    if not text:
+        return False
+    t = text.strip()
+    if len(t) < 3 or len(t) > 60:
+        return False
+    if "/" in t or "@" in t:
+        return False
+    if re.search(r"\d{4,}", t):
+        return False
+    letters = sum(c.isalpha() for c in t)
+    if letters < max(3, len(t) * 0.5):   # at least half letters
+        return False
+    upper = t.upper()
+    if upper in {"UPI", "IMPS", "NEFT", "RTGS", "ATM", "POS", "DR", "CR"}:
+        return False
+    return True
 
 
 class EntityExtractor:
 
     def __init__(self):
+        self.upi = UPIExtractor()
+        self.ifsc = IFSCExtractor()
+        self.phone = PhoneExtractor()
+        self.account = AccountExtractor()
+        self.bank = BankExtractor()
+        self.organization = OrganizationExtractor()
+        self.merchant = MerchantExtractor()
+        self.person = PersonExtractor()
 
-        self.upi = (
-            UPIExtractor()
-        )
+        # Optional spaCy NER — degrade gracefully if unavailable.
+        self.spacy = None
+        try:
+            from services.spacy_entity_extractor import SpacyEntityExtractor
+            self.spacy = SpacyEntityExtractor()
+        except Exception as exc:  # model not installed / import error
+            print(f"[INFO] spaCy NER disabled ({exc}); using rule-based only.")
 
-        self.account = (
-            AccountExtractor()
-        )
-
-        self.bank = (
-            BankExtractor()
-        )
-
-        self.organization = (
-            OrganizationExtractor()
-        )
-
-        self.merchant = (
-            MerchantExtractor()
-        )
-
-        self.person = (
-            PersonExtractor()
-        )
-
-        self.spacy = (
-            SpacyEntityExtractor()
-        )
-
-    def extract(
-        self,
-        transactions
-    ):
-
+    def extract(self, transactions):
         entities = []
 
         for txn in transactions:
+            narration = str(txn.get("narration", "") or "")
+            reference = str(txn.get("reference_number", "") or "")
+            text = (narration + " " + reference).strip()
+            if not text:
+                continue
 
-            narration = str(
-                txn.get(
-                    "narration",
-                    ""
-                )
-            )
+            self._add(entities, "UPI_ID", self.upi.extract(text), 0.97)
+            self._add(entities, "IFSC", self.ifsc.extract(text), 0.95)
+            self._add(entities, "PHONE", self.phone.extract(text), 0.9)
+            self._add(entities, "ACCOUNT_NO", self.account.extract(text), 0.9)
+            self._add(entities, "BANK", self.bank.extract(text), 0.9)
+            self._add(entities, "ORGANIZATION",
+                      self.organization.extract(text), 0.85)
+            self._add(entities, "MERCHANT", self.merchant.extract(text), 0.85)
+            self._add(entities, "PERSON", self.person.extract(text), 0.7)
 
-            reference = str(
-                txn.get(
-                    "reference_number",
-                    ""
-                )
-            )
+            if self.spacy is not None:
+                try:
+                    for e in self.spacy.extract(text):
+                        if _is_valid_name(e.identifier):
+                            entities.append(e)
+                except Exception:
+                    pass
 
-            text = (
-                narration
-                + " "
-                + reference
-            )
+        return entities
 
-            # -------------------------
-            # UPI IDs
-            # -------------------------
-
-            for upi in (
-                self.upi.extract(
-                    text
-                )
-            ):
-
+    @staticmethod
+    def _add(entities, etype, identifiers, confidence):
+        for ident in identifiers:
+            ident = (ident or "").strip()
+            if ident:
                 entities.append(
-                    Entity(
-                        entity_type="UPI_ID",
-                        identifier=upi,
-                        confidence=1.0
-                    )
+                    Entity(entity_type=etype, identifier=ident,
+                           confidence=confidence)
                 )
-
-            # -------------------------
-            # Account / Reference Numbers
-            # -------------------------
-
-            for account in (
-                self.account.extract(
-                    text
-                )
-            ):
-
-                entities.append(
-                    Entity(
-                        entity_type="ACCOUNT_NO",
-                        identifier=account,
-                        confidence=1.0
-                    )
-                )
-
-            # -------------------------
-            # Banks
-            # -------------------------
-
-            for bank in (
-                self.bank.extract(
-                    text
-                )
-            ):
-
-                entities.append(
-                    Entity(
-                        entity_type="BANK",
-                        identifier=bank,
-                        confidence=1.0
-                    )
-                )
-
-            # -------------------------
-            # Organizations
-            # -------------------------
-
-            for org in (
-                self.organization.extract(
-                    text
-                )
-            ):
-
-                entities.append(
-                    Entity(
-                        entity_type="ORGANIZATION",
-                        identifier=org,
-                        confidence=1.0
-                    )
-                )
-
-            # -------------------------
-            # Merchants
-            # -------------------------
-
-            for merchant in (
-                self.merchant.extract(
-                    text
-                )
-            ):
-
-                entities.append(
-                    Entity(
-                        entity_type="MERCHANT",
-                        identifier=merchant,
-                        confidence=1.0
-                    )
-                )
-
-            # -------------------------
-            # Banking-specific Person Extraction
-            # -------------------------
-
-            for person in (
-                self.person.extract(
-                    text
-                )
-            ):
-
-                entities.append(
-                    Entity(
-                        entity_type="PERSON",
-                        identifier=person.strip(),
-                        confidence=0.9
-                    )
-                )
-
-            # -------------------------
-            # spaCy NER
-            # -------------------------
-
-            entities.extend(
-                self.spacy.extract(
-                    text
-                )
-            )
-
-        # -------------------------
-        # Deduplicate Entities
-        # -------------------------
-
-        unique_entities = {}
-
-        for entity in entities:
-
-            key = (
-                entity.entity_type,
-                entity.identifier.upper()
-            )
-
-            unique_entities[key] = entity
-
-        return list(
-            unique_entities.values()
-        )

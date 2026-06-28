@@ -1,55 +1,43 @@
 class BalanceValidator:
+    """
+    Verify running-balance consistency (Core Requirement 2).
 
-    def validate(
-        self,
-        transactions
-    ):
+    Correct invariant for a chronologically ordered ledger:
 
-        if len(transactions) < 2:
-            return transactions
+        balance[i] == balance[i-1] + credit[i] - debit[i]
 
-        for i in range(
-            len(transactions) - 1
-        ):
+    i.e. apply THIS transaction's amount/direction to the PREVIOUS balance to
+    arrive at THIS balance. (The previous implementation applied the current
+    txn's amount to the current balance to predict the next — the wrong
+    relationship.)
 
-            current = transactions[i]
+    Rows adjacent to a missing balance are skipped (we can't bridge the gap),
+    and failed/reversed legs are tolerated since they still move the balance.
+    """
 
-            nxt = transactions[i + 1]
+    def __init__(self, tolerance: float = 1.0):
+        self.tolerance = tolerance
 
-            if (
-                current.balance is None
-                or nxt.balance is None
-            ):
-                continue
+    def validate(self, transactions):
+        prev_balance = None
+        for txn in transactions:
+            cur_balance = txn.balance
 
-            expected = current.balance
+            can_check = (
+                prev_balance is not None
+                and cur_balance is not None
+                and txn.amount is not None
+                and txn.debit_credit in ("DEBIT", "CREDIT")
+            )
+            if can_check:
+                signed = txn.amount if txn.debit_credit == "CREDIT" else -txn.amount
+                expected = prev_balance + signed
+                if abs(expected - cur_balance) > self.tolerance:
+                    txn.is_valid = False
+                    if "balance_mismatch" not in txn.validation_notes:
+                        txn.validation_notes.append("balance_mismatch")
 
-            if (
-                current.debit_credit
-                == "DEBIT"
-            ):
-
-                expected -= (
-                    current.amount or 0
-                )
-
-            elif (
-                current.debit_credit
-                == "CREDIT"
-            ):
-
-                expected += (
-                    current.amount or 0
-                )
-
-            if abs(
-                expected - nxt.balance
-            ) > 1:
-
-                nxt.is_valid = False
-
-                nxt.validation_notes.append(
-                    "balance_mismatch"
-                )
+            # advance the reference balance (reset across gaps)
+            prev_balance = cur_balance
 
         return transactions

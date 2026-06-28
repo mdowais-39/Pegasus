@@ -5,6 +5,7 @@ from parsers.csv_parser import CSVParser
 from parsers.excel_parser import ExcelParser
 from parsers.docx_parser import DOCXParser
 from parsers.image_parser import ImageParser
+from parsers.txt_parser import TXTParser
 
 
 class ParserRegistry:
@@ -19,6 +20,8 @@ class ParserRegistry:
             ".xls": ExcelParser(),
 
             ".docx": DOCXParser(),
+
+            ".txt": TXTParser(),
 
             ".png": ImageParser(),
             ".jpg": ImageParser(),
