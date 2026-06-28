@@ -36,7 +36,7 @@ class CanonicalMapper:
                 continue
                 
         # Regex search for date (handles both digits and letters)
-        match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](?:\d{2}|\d{4})", val_str)
+        match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{2}|\d{4})", val_str)
         if match:
             day, month_str, year = match.groups()
             if len(year) == 2:
@@ -125,7 +125,7 @@ class CanonicalMapper:
             if "raw_text" in norm_tx and len(norm_tx) == 1:
                 line = norm_tx["raw_text"]
                 # 1. Date
-                date_match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](?:\d{2}|\d{4})", line)
+                date_match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{2}|\d{4})", line)
                 if not date_match:
                     continue
                 tx_date = self.parse_date(date_match.group(0))
