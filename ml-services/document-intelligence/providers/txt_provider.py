@@ -106,7 +106,17 @@ class TXTProvider(DocumentProvider):
                 for i in range(len(col_positions)):
                     name, start = col_positions[i]
                     end = col_positions[i+1][1] if i + 1 < len(col_positions) else None
-                    col_spans.append((name, start, end))
+                    col_spans.append({"name": name, "start": start, "end": end})
+                
+                # Dynamically adjust start/end boundaries of numeric columns to capture right-aligned values
+                for idx, span in enumerate(col_spans):
+                    if span["name"] in ["debit", "credit", "balance"]:
+                        prev_start = col_spans[idx-1]["start"] if idx > 0 else 0
+                        # Shift the start boundary left by 8 spaces to handle shifting/padding of amounts
+                        new_start = max(prev_start + 2, span["start"] - 8)
+                        span["start"] = new_start
+                        if idx > 0:
+                            col_spans[idx-1]["end"] = new_start
                 
                 # Extract transaction data
                 for line in lines[header_idx+1:]:
@@ -120,7 +130,10 @@ class TXTProvider(DocumentProvider):
                         continue
                         
                     row_dict = {}
-                    for name, start, end in col_spans:
+                    for span in col_spans:
+                        name = span["name"]
+                        start = span["start"]
+                        end = span["end"]
                         val = line[start:end].strip() if start < len(line) else ""
                         row_dict[name] = val
                     transactions.append(row_dict)
