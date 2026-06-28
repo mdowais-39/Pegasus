@@ -1,14 +1,17 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
+from datetime import datetime
 
-class Transaction(BaseModel):
-    transaction_id: str
+class CanonicalTransaction(BaseModel):
     transaction_date: datetime
     value_date: Optional[datetime] = None
-    description: str
+    narration: str
+    reference_number: Optional[str] = None
+    cheque_number: Optional[str] = None
     debit: Optional[float] = None
     credit: Optional[float] = None
     balance: float
-    reference_number: Optional[str] = None
-    transaction_channel: Optional[str] = None
+    transaction_type: Optional[str] = None
+    source_bank: Optional[str] = None
+    source_file: Optional[str] = None
+    confidence: float = 1.0

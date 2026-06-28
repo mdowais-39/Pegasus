@@ -1,3 +1,3 @@
 from .account import AccountMetadata
-from .transaction import Transaction
-from .document import CanonicalDocument
+from .transaction import CanonicalTransaction
+from .document import CanonicalDocument, DocumentIR
