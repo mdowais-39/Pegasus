@@ -12,7 +12,10 @@ class CanonicalMapper:
         if isinstance(val, datetime):
             return val
         
-        val_str = str(val).strip()
+        # Clean newlines and double spaces in dates
+        val_str = str(val).strip().replace("\n", "").replace("\r", "")
+        val_str = re.sub(r"\s+", " ", val_str)
+        
         if "t" in val_str.lower():
             val_str = val_str.lower().split("t")[0]
         elif " " in val_str:
@@ -32,6 +35,7 @@ class CanonicalMapper:
             except ValueError:
                 continue
                 
+        # Regex search for date
         match = re.search(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})", val_str)
         if match:
             day, month, year = match.groups()
@@ -107,15 +111,69 @@ class CanonicalMapper:
     def map_transactions(self, raw_txs: List[Dict[str, Any]], source_file: str, bank_name: str) -> List[CanonicalTransaction]:
         mapped = []
         for tx in raw_txs:
-            # Normalize keys, replacing whitespace and newlines with underscores
             norm_tx = {str(k).lower().replace(" ", "_").replace("\n", "_").replace(".", "").replace("/", "_"): v for k, v in tx.items()}
             
+            # Check if it is a text fallback line
+            if "raw_text" in norm_tx and len(norm_tx) == 1:
+                line = norm_tx["raw_text"]
+                # 1. Date
+                date_match = re.search(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})", line)
+                if not date_match:
+                    continue
+                tx_date = self.parse_date(date_match.group(0))
+                if not tx_date:
+                    continue
+                
+                # 2. Amounts
+                amounts = re.findall(r"[\d,]+\.\d{2}", line)
+                debit = None
+                credit = None
+                balance = 0.0
+                
+                remaining = line[date_match.end():].strip()
+                if len(amounts) >= 2:
+                    balance = self.parse_float(amounts[-1]) or 0.0
+                    amt = self.parse_float(amounts[-2])
+                    
+                    remaining_lower = remaining.lower()
+                    if "cr" in remaining_lower or "deposit" in remaining_lower or "credit" in remaining_lower:
+                        credit = amt
+                    elif "dr" in remaining_lower or "withdrawal" in remaining_lower or "debit" in remaining_lower:
+                        debit = amt
+                    else:
+                        credit = amt
+                elif len(amounts) == 1:
+                    balance = self.parse_float(amounts[0]) or 0.0
+                    
+                # 3. Narration
+                narration = remaining
+                for amt_str in amounts:
+                    narration = narration.replace(amt_str, "")
+                narration = re.sub(r"\s+", " ", narration).strip()
+                
+                mapped.append(
+                    CanonicalTransaction(
+                        transaction_date=tx_date,
+                        value_date=tx_date,
+                        narration=narration or "Transaction entry",
+                        reference_number=None,
+                        cheque_number=None,
+                        debit=debit,
+                        credit=credit,
+                        balance=balance,
+                        transaction_type="DEBIT" if debit else "CREDIT",
+                        source_bank=bank_name,
+                        source_file=source_file,
+                        confidence=0.9
+                    )
+                )
+                continue
+
+            # Standard column-based mapping
             def find_field(keys: List[str]) -> Optional[Any]:
-                # 1. Exact match
                 for key in keys:
                     if key in norm_tx:
                         return norm_tx[key]
-                # 2. Fuzzy substring match
                 for key in keys:
                     for norm_key in norm_tx:
                         if key in norm_key:

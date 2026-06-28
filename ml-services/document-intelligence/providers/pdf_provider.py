@@ -60,7 +60,8 @@ class PDFProvider(DocumentProvider):
                 for table in tables.tables:
                     raw_table_data = table.extract()
                     if raw_table_data and len(raw_table_data) > 1:
-                        headers = [str(cell).strip().lower() for cell in raw_table_data[0] if cell is not None]
+                        # Keep None fields as placeholder col_i to match row lengths
+                        headers = [str(cell).strip().lower() if cell is not None else f"col_{i}" for i, cell in enumerate(raw_table_data[0])]
                         header_keys = {"date", "desc", "narration", "particulars", "debit", "credit", "balance"}
                         matches = sum(1 for h in headers if any(key in h for key in header_keys))
                         if matches >= 2:
