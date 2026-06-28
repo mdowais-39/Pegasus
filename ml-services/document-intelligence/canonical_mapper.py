@@ -35,14 +35,22 @@ class CanonicalMapper:
             except ValueError:
                 continue
                 
-        # Regex search for date
-        match = re.search(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})", val_str)
+        # Regex search for date (handles both digits and letters)
+        match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](?:\d{2}|\d{4})", val_str)
         if match:
-            day, month, year = match.groups()
+            day, month_str, year = match.groups()
             if len(year) == 2:
                 year = "20" + year
+            
+            # If month is letters, map to number
+            month_map = {
+                "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+                "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+            }
             try:
-                return datetime(int(year), int(month), int(day))
+                month = month_map.get(month_str.lower()) if month_str.isalpha() else int(month_str)
+                if month:
+                    return datetime(int(year), int(month), int(day))
             except ValueError:
                 pass
                 
@@ -117,7 +125,7 @@ class CanonicalMapper:
             if "raw_text" in norm_tx and len(norm_tx) == 1:
                 line = norm_tx["raw_text"]
                 # 1. Date
-                date_match = re.search(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})", line)
+                date_match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](?:\d{2}|\d{4})", line)
                 if not date_match:
                     continue
                 tx_date = self.parse_date(date_match.group(0))
