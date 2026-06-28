@@ -12,7 +12,7 @@ class CanonicalMapper:
         if isinstance(val, datetime):
             return val
         
-        # Clean newlines and double spaces in dates
+        # Clean newlines and carriage returns
         val_str = str(val).strip().replace("\n", "").replace("\r", "")
         val_str = re.sub(r"\s+", " ", val_str)
         
@@ -35,8 +35,8 @@ class CanonicalMapper:
             except ValueError:
                 continue
                 
-        # Regex search for date (handles both digits and letters)
-        match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{2}|\d{4})", val_str)
+        # Regex search for date (handles both digits and letters, matching 4-digit year first)
+        match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{4}|\d{2})", val_str)
         if match:
             day, month_str, year = match.groups()
             if len(year) == 2:
@@ -124,8 +124,17 @@ class CanonicalMapper:
             # Check if it is a text fallback line
             if "raw_text" in norm_tx and len(norm_tx) == 1:
                 line = norm_tx["raw_text"]
-                # 1. Date
-                date_match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{2}|\d{4})", line)
+                
+                # Exclude statement and page headers
+                blacklist = [
+                    "statement for", "statement of", "page ", "customer id", "account number",
+                    "closing balance", "opening balance", "total debits", "total credits"
+                ]
+                if any(kw in line.lower() for kw in blacklist):
+                    continue
+                    
+                # 1. Date (handles both digits and letters, matching 4-digit year first)
+                date_match = re.search(r"(\d{1,2})[-/.]([a-zA-Z]{3}|\d{1,2})[-/.](\d{4}|\d{2})", line)
                 if not date_match:
                     continue
                 tx_date = self.parse_date(date_match.group(0))
@@ -198,7 +207,10 @@ class CanonicalMapper:
             val_date_raw = find_field(["value_date", "val_date", "value_dt", "val_dt"])
             val_date = self.parse_date(val_date_raw) or tx_date
 
-            narration = find_field(["narration", "description", "particulars", "remarks", "desc", "transaction_particulars", "raw_text", "particular"]) or ""
+            narration = find_field([
+                "narration", "description", "particulars", "remarks", "desc",
+                "transaction_particulars", "raw_text", "particular", "details", "transaction_details"
+            ]) or ""
             
             debit = self.parse_float(find_field(["debit", "withdrawal", "withdrawals", "amount_debit", "dr"]))
             credit = self.parse_float(find_field(["credit", "deposit", "deposits", "amount_credit", "cr"]))
