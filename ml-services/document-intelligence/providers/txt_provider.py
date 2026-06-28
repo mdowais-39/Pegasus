@@ -35,6 +35,15 @@ class TXTProvider(DocumentProvider):
                 elif "branch" in k:
                     metadata["branch"] = v
 
+        if "bank_name" not in metadata:
+            filename_lower = Path(file_path).name.lower()
+            if "klgb" in filename_lower or "kerala" in filename_lower or "nitin" in filename_lower:
+                metadata["bank_name"] = "Kerala Gramin Bank"
+            elif "sbi" in filename_lower:
+                metadata["bank_name"] = "State Bank of India"
+            else:
+                metadata["bank_name"] = "Unknown Bank"
+
         # Determine if it is tab-separated or fixed-width
         is_tsv = False
         tab_counts = [line.count("\t") for line in lines[:50]]
@@ -129,6 +138,46 @@ class TXTProvider(DocumentProvider):
                     if not re.search(r"\d{1,4}[-/.]\d{1,4}[-/.]\d{1,4}", first_part):
                         continue
                         
+                    # KGB Bank specific robust parser fallback
+                    if metadata.get("bank_name") == "Kerala Gramin Bank":
+                        parts = re.split(r"\s+", line.strip(), 3)
+                        if len(parts) >= 4:
+                            trans_dt, val_dt, txn_id, rest = parts
+                            matches = list(re.finditer(r"[\d,]+\.\d{2}", line))
+                            if len(matches) == 2:
+                                num1_match, num2_match = matches
+                                num1_val = num1_match.group()
+                                num2_val = num2_match.group()
+                                end_pos = num1_match.end()
+                                
+                                particulars_end = min(82, num1_match.start())
+                                particulars = line[32:particulars_end].strip()
+                                
+                                if end_pos <= 108:
+                                    row_dict = {
+                                        "date": trans_dt,
+                                        "value_date": val_dt,
+                                        "transaction_id": txn_id,
+                                        "particulars": particulars,
+                                        "cheque_number": "",
+                                        "debit": num1_val,
+                                        "credit": "",
+                                        "balance": num2_val
+                                    }
+                                else:
+                                    row_dict = {
+                                        "date": trans_dt,
+                                        "value_date": val_dt,
+                                        "transaction_id": txn_id,
+                                        "particulars": particulars,
+                                        "cheque_number": "",
+                                        "debit": "",
+                                        "credit": num1_val,
+                                        "balance": num2_val
+                                    }
+                                transactions.append(row_dict)
+                                continue
+
                     row_dict = {}
                     for span in col_spans:
                         name = span["name"]
@@ -137,15 +186,6 @@ class TXTProvider(DocumentProvider):
                         val = line[start:end].strip() if start < len(line) else ""
                         row_dict[name] = val
                     transactions.append(row_dict)
-
-        if "bank_name" not in metadata:
-            filename_lower = Path(file_path).name.lower()
-            if "klgb" in filename_lower or "kerala" in filename_lower or "nitin" in filename_lower:
-                metadata["bank_name"] = "Kerala Gramin Bank"
-            elif "sbi" in filename_lower:
-                metadata["bank_name"] = "State Bank of India"
-            else:
-                metadata["bank_name"] = "Unknown Bank"
 
         return DocumentIR(
             source_file=str(file_path),
