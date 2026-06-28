@@ -11,15 +11,13 @@ class TXTProvider(DocumentProvider):
 
         # Extract metadata
         metadata = {}
-        for line in lines[:15]:
+        for line in lines[:20]:
             line_str = line.strip()
             if ":" in line_str:
                 parts = line_str.split(":", 1)
                 k = parts[0].strip().lower().replace(" ", "_")
                 v = parts[1].strip()
                 if "account" in k and "num" in k:
-                    # e.g., "Account Number : SB101 40211101047567 NITIN ADITYA"
-                    # Split account number and holder if possible
                     if " " in v:
                         v_parts = v.split(" ", 1)
                         metadata["account_number"] = v_parts[0].strip()
@@ -41,6 +39,8 @@ class TXTProvider(DocumentProvider):
                 metadata["bank_name"] = "Kerala Gramin Bank"
             elif "sbi" in filename_lower:
                 metadata["bank_name"] = "State Bank of India"
+            elif "pnb" in filename_lower or "shivlal" in filename_lower:
+                metadata["bank_name"] = "Punjab National Bank"
             else:
                 metadata["bank_name"] = "Unknown Bank"
 
@@ -56,7 +56,7 @@ class TXTProvider(DocumentProvider):
         if is_tsv:
             # Parse TSV
             header_idx = -1
-            for idx, line in enumerate(lines[:30]):
+            for idx, line in enumerate(lines[:100]):
                 parts = [p.strip().lower() for p in line.split("\t")]
                 matches = sum(1 for p in parts if any(key in p for key in header_keys))
                 if header_idx == -1 and matches >= 2:
@@ -76,59 +76,16 @@ class TXTProvider(DocumentProvider):
         else:
             # Parse Fixed-width
             header_idx = -1
-            for idx, line in enumerate(lines[:30]):
-                line_lower = line.lower()
-                matches = sum(1 for key in header_keys if key in line_lower)
-                if matches >= 3: # Higher threshold for fixed width header matching
+            for idx in range(len(lines) - 1):
+                line_lower = lines[idx].lower()
+                next_lower = lines[idx+1].lower()
+                combined_matches = sum(1 for key in header_keys if key in line_lower or key in next_lower)
+                if combined_matches >= 3:
                     header_idx = idx
                     break
             
             if header_idx != -1:
-                header_line = lines[header_idx]
-                
-                # Detect column spans - sorting patterns by length descending
-                col_patterns = {
-                    "date": ["trans dt", "txn date", "transn date", "date"],
-                    "value_date": ["value date", "value dt", "val dt"],
-                    "transaction_id": ["transaction id", "transn id", "txn id", "trans.id", "ref"],
-                    "particulars": ["transaction particulars", "particulars", "narration", "description", "desc"],
-                    "cheque_number": ["ins number", "chq.no", "cheque", "instrument"],
-                    "debit": ["debit amount", "debit", "withdrawal", "withdrawals"],
-                    "credit": ["credit amount", "credit", "deposit", "deposits"],
-                    "balance": ["balance"]
-                }
-                
-                col_positions = []
-                for col_name, patterns in col_patterns.items():
-                    found_idx = -1
-                    for p in patterns:
-                        idx_pos = header_line.lower().find(p)
-                        if idx_pos != -1:
-                            found_idx = idx_pos
-                            break
-                    if found_idx != -1:
-                        col_positions.append((col_name, found_idx))
-                
-                col_positions.sort(key=lambda x: x[1])
-                
-                col_spans = []
-                for i in range(len(col_positions)):
-                    name, start = col_positions[i]
-                    end = col_positions[i+1][1] if i + 1 < len(col_positions) else None
-                    col_spans.append({"name": name, "start": start, "end": end})
-                
-                # Dynamically adjust start/end boundaries of numeric columns to capture right-aligned values
-                for idx, span in enumerate(col_spans):
-                    if span["name"] in ["debit", "credit", "balance"]:
-                        prev_start = col_spans[idx-1]["start"] if idx > 0 else 0
-                        # Shift the start boundary left by 8 spaces to handle shifting/padding of amounts
-                        new_start = max(prev_start + 2, span["start"] - 8)
-                        span["start"] = new_start
-                        if idx > 0:
-                            col_spans[idx-1]["end"] = new_start
-                
-                # Extract transaction data
-                for line in lines[header_idx+1:]:
+                for idx, line in enumerate(lines[header_idx+1:], header_idx+1):
                     line_str = line.strip()
                     if not line_str or line_str.startswith("---") or line_str.startswith("==="):
                         continue
@@ -138,53 +95,66 @@ class TXTProvider(DocumentProvider):
                     if not re.search(r"\d{1,4}[-/.]\d{1,4}[-/.]\d{1,4}", first_part):
                         continue
                         
-                    # KGB Bank specific robust parser fallback
-                    if metadata.get("bank_name") == "Kerala Gramin Bank":
-                        parts = re.split(r"\s+", line.strip(), 3)
-                        if len(parts) >= 4:
-                            trans_dt, val_dt, txn_id, rest = parts
-                            matches = list(re.finditer(r"[\d,]+\.\d{2}", line))
-                            if len(matches) == 2:
-                                num1_match, num2_match = matches
-                                num1_val = num1_match.group()
-                                num2_val = num2_match.group()
-                                end_pos = num1_match.end()
-                                
-                                particulars_end = min(82, num1_match.start())
-                                particulars = line[32:particulars_end].strip()
-                                
-                                if end_pos <= 108:
-                                    row_dict = {
-                                        "date": trans_dt,
-                                        "value_date": val_dt,
-                                        "transaction_id": txn_id,
-                                        "particulars": particulars,
-                                        "cheque_number": "",
-                                        "debit": num1_val,
-                                        "credit": "",
-                                        "balance": num2_val
-                                    }
-                                else:
-                                    row_dict = {
-                                        "date": trans_dt,
-                                        "value_date": val_dt,
-                                        "transaction_id": txn_id,
-                                        "particulars": particulars,
-                                        "cheque_number": "",
-                                        "debit": "",
-                                        "credit": num1_val,
-                                        "balance": num2_val
-                                    }
-                                transactions.append(row_dict)
-                                continue
-
-                    row_dict = {}
-                    for span in col_spans:
-                        name = span["name"]
-                        start = span["start"]
-                        end = span["end"]
-                        val = line[start:end].strip() if start < len(line) else ""
-                        row_dict[name] = val
+                    # Find all decimal numbers in the line
+                    matches = list(re.finditer(r"[\d,]+\.\d{2}", line))
+                    if not matches:
+                        continue
+                        
+                    # Reject if contains page or report headers
+                    blacklist = ["page ", "punjab national bank", "ledger report", "order by", "customer id", "statement of"]
+                    if any(kw in line.lower() for kw in blacklist):
+                        continue
+                        
+                    # Split prefix
+                    prefix = line[:80].strip()
+                    parts = re.split(r"\s+", prefix)
+                    
+                    date1 = parts[0]
+                    date2 = parts[1] if len(parts) > 1 else ""
+                    txn_id = ""
+                    particulars = ""
+                    
+                    if len(parts) > 2:
+                        if re.match(r"^[S|M|G|N]\d+/\d+$", parts[2]) or "/" in parts[2] and len(parts[2]) < 15:
+                            txn_id = parts[2]
+                            txn_idx = line.find(txn_id)
+                            particulars_start = txn_idx + len(txn_id)
+                        else:
+                            date2_idx = line.find(date2, len(date1))
+                            particulars_start = date2_idx + len(date2)
+                            
+                        particulars_end = matches[0].start() if matches else len(line)
+                        particulars = line[particulars_start:particulars_end].strip()
+                        
+                    debit = ""
+                    credit = ""
+                    balance = ""
+                    
+                    if len(matches) == 2:
+                        num1_match, num2_match = matches
+                        num1_val = num1_match.group()
+                        num2_val = num2_match.group()
+                        
+                        # Universal distance check
+                        dist = num2_match.end() - num1_match.end()
+                        if dist > 25:
+                            debit = num1_val
+                        else:
+                            credit = num1_val
+                        balance = num2_val
+                    elif len(matches) == 1:
+                        balance = matches[0].group()
+                        
+                    row_dict = {
+                        "date": date1,
+                        "value_date": date2,
+                        "transaction_id": txn_id,
+                        "particulars": particulars,
+                        "cheque_number": "",
+                        "debit": debit,
+                        "credit": credit,
+                        "balance": balance
+                    }
                     transactions.append(row_dict)
 
         return DocumentIR(

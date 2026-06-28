@@ -1,13 +1,27 @@
 import sys
+import logging
 from pathlib import Path
 from providers.base import DocumentProvider
 from schemas.document import DocumentIR
 
+logger = logging.getLogger(__name__)
+
 class LegacyProvider(DocumentProvider):
     def extract(self, file_path: str) -> DocumentIR:
+        # Graceful degradation check for optional fallback dependencies
+        try:
+            import pdfplumber
+        except ImportError:
+            logger.warning(
+                "pdfplumber unavailable; skipping LegacyProvider fallback."
+            )
+            return None
+
         ocr_path = Path(__file__).parent.parent / "ocr"
         if str(ocr_path) not in sys.path:
-            sys.path.insert(0, str(ocr_path))
+            # Note: Path(__file__).parent.parent.parent points to ml-services, and / ocr points to ml-services/ocr
+            actual_ocr_path = Path(__file__).parent.parent.parent / "ocr"
+            sys.path.insert(0, str(actual_ocr_path))
 
         from services.extraction_service import ExtractionService
         from services.statement_understanding import StatementUnderstandingEngine
@@ -21,7 +35,6 @@ class LegacyProvider(DocumentProvider):
         # The legacy understanding engine process function expects raw text strings or dicts
         # Let's map it into strings if the process function expects strings
         # In RowGrouper/TableReconstructor it expects line strings.
-        # Wait, if raw_result contains {"text": ...} dicts in rows, let's extract them
         string_rows = []
         for r in rows:
             if isinstance(r, dict):

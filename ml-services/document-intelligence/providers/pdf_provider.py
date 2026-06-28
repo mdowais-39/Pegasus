@@ -134,6 +134,8 @@ class PDFProvider(DocumentProvider):
         for page_idx, page in enumerate(doc):
             page_txs = []
             tables = page.find_tables()
+            table_detected = False
+            
             if tables and tables.tables:
                 for table in tables.tables:
                     raw_table_data = table.extract()
@@ -142,6 +144,7 @@ class PDFProvider(DocumentProvider):
                         header_keys = {"date", "desc", "narration", "particulars", "debit", "credit", "balance", "details"}
                         matches = sum(1 for h in headers if any(key in h for key in header_keys))
                         if matches >= 2:
+                            table_detected = True
                             for row in raw_table_data[1:]:
                                 if len(row) == len(headers):
                                     row_dict = {}
@@ -150,6 +153,12 @@ class PDFProvider(DocumentProvider):
                                     # Ensure row is not entirely empty
                                     if any(row_dict.values()):
                                         page_txs.append(row_dict)
+            
+            # Print page status as required by stabilization checks
+            if table_detected:
+                print(f"Page {page_idx + 1}:\nTransaction table detected")
+            else:
+                print(f"Page {page_idx + 1}:\nNo transaction table found")
             
             # If no rows extracted from tables, use line regex fallback
             if not page_txs:

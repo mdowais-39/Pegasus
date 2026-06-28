@@ -40,9 +40,15 @@ class DocumentIntelligenceOrchestrator:
             print(f"[ORCHESTRATOR] [WARNING] Provider {provider.__class__.__name__} failed with error: {e}. Falling back to LegacyProvider...")
             try:
                 ir_legacy = self.legacy_provider.extract(file_path)
+                if ir_legacy is None:
+                    raise ImportError("pdfplumber unavailable; skipping LegacyProvider fallback.")
                 doc_legacy = self.mapper.map_document(ir_legacy)
                 doc_legacy.warnings.append(f"Primary provider failed. Fell back to legacy pipeline. Error: {str(e)}")
                 return doc_legacy
             except Exception as fallback_err:
                 print(f"[ORCHESTRATOR] [ERROR] Fallback LegacyProvider also failed: {fallback_err}")
+                # Handle graceful degradation if primary provider finished but had 0 transactions
+                if 'doc' in locals() and doc is not None:
+                    doc.warnings.append(f"Primary provider returned 0 transactions. Fallback legacy pipeline failed: {str(fallback_err)}")
+                    return doc
                 raise fallback_err

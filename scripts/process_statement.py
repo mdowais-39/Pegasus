@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import argparse
+import re
 from pathlib import Path
 import pandas as pd
 
@@ -18,8 +19,21 @@ if str(ocr_path) not in sys.path:
 
 from orchestrator import DocumentIntelligenceOrchestrator
 
+def sanitize_document_name(name: str) -> str:
+    # 1. Strip leading/trailing whitespace
+    name = name.strip()
+    # 2. Replace < > : " / \ | ? * with underscores
+    unsafe_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+    for char in unsafe_chars:
+        name = name.replace(char, '_')
+    # 3. Collapse multiple spaces
+    name = re.sub(r'\s+', ' ', name)
+    return name
+
 def persist_document(doc, filename: str, output_root: Path):
     doc_name = Path(filename).stem
+    # Sanitize document name for safe filesystem path
+    doc_name = sanitize_document_name(doc_name)
     dest_dir = output_root / doc_name
     dest_dir.mkdir(parents=True, exist_ok=True)
     
@@ -61,6 +75,7 @@ def persist_document(doc, filename: str, output_root: Path):
     print(f"[SUCCESS] Persisted standardized outputs for {filename} under: {dest_dir.relative_to(root_dir)}")
 
 def inspect_document(doc_name: str, output_root: Path):
+    doc_name = sanitize_document_name(doc_name)
     dest_dir = output_root / doc_name
     if not dest_dir.exists():
         print(f"[ERROR] Document '{doc_name}' has not been standardized or does not exist under {output_root.relative_to(root_dir)}.")
