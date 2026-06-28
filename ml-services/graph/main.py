@@ -425,6 +425,47 @@ def investigation_timeline(account: str):
             "timeline": inv.timeline(rows)}
 
 
+# ==========================================================================
+# Phase 6 — Explainability (narratives + evidence)
+# ==========================================================================
+
+from services import explainability as expl                # noqa: E402
+
+
+@app.get("/explain/account/{account}")
+def explain_account_endpoint(account: str, include_external: bool = True):
+    rows = _loader.load_account_transactions(account)
+    eng = _engine_from_rows(rows)
+    scored = _risk_for_rows(rows, with_external=include_external)
+    profile = next((r for r in scored if r["node"] == account), None)
+    if profile is None:
+        profile = {"node": account, "risk_score": 0.0, "risk_level": "LOW",
+                   "factors": [], "top_reasons": []}
+    return expl.explain_account(profile, eng, account)
+
+
+@app.get("/explain/round-trips")
+def explain_round_trips_list():
+    eng = _engine_from_rows(_loader.load_all_transactions())
+    cycles = fa.detect_round_trips(eng)
+    return {"count": len(cycles),
+            "round_trips": [
+                {"chain_id": c["id"], "nodes": c["nodes"],
+                 "bottleneck_amount": c["min_amount"], "length": c["length"]}
+                for c in cycles]}
+
+
+@app.get("/explain/round-trip/{chain_id}")
+def explain_round_trip_endpoint(chain_id: int):
+    eng = _engine_from_rows(_loader.load_all_transactions())
+    cycles = fa.detect_round_trips(eng)
+    cycle = next((c for c in cycles if c["id"] == chain_id), None)
+    if cycle is None:
+        return {"chain_id": chain_id, "found": False,
+                "message": "round-trip chain not found"}
+    return expl.explain_round_trip(cycle, eng)
+
+
 @app.get("/investigation/account/{account}")
 def investigation_account(account: str, include_external: bool = True):
     """One-stop investigator dossier for an account."""

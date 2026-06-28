@@ -1,420 +1,136 @@
-use crate::{
-    models::{
-        statement::ProcessingJob,
-        transaction::Transaction,
-        entity::CanonicalEntity,
-    },
-    services::{
-        transaction_service::save_transactions,
-        entity_service::save_entities,
-    },
-};
+//! Background worker: runs the ingestion pipeline per uploaded statement and
+//! keeps the DB-backed job row up to date (queued -> processing -> completed |
+//! failed) so the status endpoint reflects reality.
 
 use reqwest::Client;
-use serde_json::Value;
+use serde_json::{json, Value};
 use sqlx::PgPool;
+use tokio::sync::mpsc::Receiver;
 
-pub async fn start_worker(
-    mut receiver: tokio::sync::mpsc::Receiver<
-        ProcessingJob,
-    >,
-    db: PgPool,
-) {
+use crate::{
+    models::{
+        entity::CanonicalEntity,
+        statement::ProcessingJob,
+        transaction::Transaction,
+    },
+    repositories::{job_repository::update_job, statement::update_statement_status},
+    services::{entity_service::save_entities, transaction_service::save_transactions},
+};
+
+// service URLs (kept local to the pipeline; the API gateway uses ServiceConfig)
+const OCR: &str = "http://localhost:8001/extract";
+const STANDARDIZE: &str = "http://localhost:8002/standardize";
+const VALIDATE: &str = "http://localhost:8004/validate";
+const ENTITY: &str = "http://localhost:8003/resolve";
+const GRAPH_ANALYZE: &str = "http://localhost:8005/flow/analyze/all";
+
+pub async fn start_worker(mut receiver: Receiver<ProcessingJob>, db: PgPool) {
     let client = Client::new();
 
-    while let Some(job) =
-        receiver.recv().await
-    {
-        println!(
-            "\nProcessing statement: {}",
-            job.statement_id
-        );
+    while let Some(job) = receiver.recv().await {
+        println!("\nProcessing statement: {}", job.statement_id);
 
-        println!("Status: processing");
+        match process_job(&client, &db, &job).await {
+            Ok(()) => {
+                update_job(&db, job.job_id, "completed", 100, "done", None).await;
+                let _ = update_statement_status(&db, job.statement_id, "completed").await;
+                println!("Job {} completed", job.job_id);
+            }
+            Err(err) => {
+                update_job(&db, job.job_id, "failed", 0, "error", Some(&err)).await;
+                let _ = update_statement_status(&db, job.statement_id, "failed").await;
+                println!("Job {} FAILED: {}", job.job_id, err);
+            }
+        }
+    }
+}
 
-        println!(
-            "Sending file path to OCR:\n{}",
-            job.file_path
-        );
+async fn process_job(
+    client: &Client,
+    db: &PgPool,
+    job: &ProcessingJob,
+) -> Result<(), String> {
+    update_job(db, job.job_id, "processing", 10, "ocr", None).await;
+    let _ = update_statement_status(db, job.statement_id, "processing").await;
 
-        let absolute_path =
-            std::fs::canonicalize(
-                &job.file_path
-            )
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+    let abs_path = std::fs::canonicalize(&job.file_path)
+        .map_err(|e| format!("path error: {}", e))?
+        .to_string_lossy()
+        .to_string();
 
-        let ocr_response = client
-            .post(
-                "http://localhost:8001/extract"
-            )
-            .json(&serde_json::json!({
-                "file_path": absolute_path
-            }))
-            .send()
-            .await;
+    // 1. OCR / extraction
+    let ocr = post(client, OCR, &json!({ "file_path": abs_path })).await?;
 
-        match ocr_response {
+    // 2. standardize
+    update_job(db, job.job_id, "processing", 30, "standardize", None).await;
+    let standardized =
+        post(client, STANDARDIZE, &json!({ "rows": ocr["rows"] })).await?;
 
-            Ok(resp) => {
-
-                let ocr_json: Value =
-                    match resp.json().await {
-
-                        Ok(data) => data,
-
-                        Err(err) => {
-
-                            println!(
-                                "Failed to parse OCR JSON: {}",
-                                err
-                            );
-
-                            continue;
-                        }
-                    };
-
-                println!(
-                    "\n========== OCR OUTPUT ==========\n{}",
-                    serde_json::to_string_pretty(
-                        &ocr_json
-                    )
-                    .unwrap()
-                );
-
-                let standardize_response =
-                    client
-                        .post(
-                            "http://localhost:8002/standardize"
-                        )
-                        .json(
-                            &serde_json::json!({
-                                "rows": ocr_json["rows"]
-                            })
-                        )
-                        .send()
-                        .await;
-
-                match standardize_response {
-
-                    Ok(resp) => {
-
-                        let standardized_json: Value =
-                            match resp.json().await {
-
-                                Ok(data) => data,
-
-                                Err(err) => {
-
-                                    println!(
-                                        "Failed to parse standardized JSON: {}",
-                                        err
-                                    );
-
-                                    continue;
-                                }
-                            };
-
-                        println!(
-                            "\n========== STANDARDIZED OUTPUT ==========\n{}",
-                        
-                            
-
-
-                            serde_json::to_string_pretty(
-                                &standardized_json
-                            )
-                            .unwrap()
-                        );
-
-                        // --------------------------------
-// Validation Service
-// --------------------------------
-
-let validation_response =
-    client
-        .post(
-            "http://localhost:8004/validate"
-        )
-        .json(
-            &serde_json::json!({
-                "transactions":
-                    standardized_json[
-                        "transactions"
-                    ]
-            })
-        )
-        .send()
-        .await;
-
-match validation_response {
-
-    Ok(resp) => {
-
-        let validated_json: Value =
-            match resp.json().await {
-
-                Ok(data) => data,
-
-                Err(err) => {
-
-                    println!(
-                        "Failed to parse validation JSON: {}",
-                        err
-                    );
-
-                    continue;
-                }
-            };
-
-        println!(
-            "\n========== VALIDATION OUTPUT ==========\n{}",
-            serde_json::to_string_pretty(
-                &validated_json
-            )
-            .unwrap()
-        );
-
-        println!(
-    "\nFIRST VALIDATED TXN:\n{}",
-    serde_json::to_string_pretty(
-        &validated_json["transactions"][0]
+    // 3. validate
+    update_job(db, job.job_id, "processing", 45, "validate", None).await;
+    let validated = post(
+        client,
+        VALIDATE,
+        &json!({ "transactions": standardized["transactions"] }),
     )
-    .unwrap()
-);
+    .await?;
 
-        // --------------------------------
-        // Deserialize Transactions
-        // --------------------------------
+    // 4. persist transactions
+    let txns: Vec<Transaction> =
+        serde_json::from_value(validated["transactions"].clone()).unwrap_or_default();
+    println!("Saving {} transactions", txns.len());
+    save_transactions(db, job.statement_id, txns).await;
 
-        let transactions:
-            Vec<Transaction> =
+    // 5. entities
+    update_job(db, job.job_id, "processing", 65, "entities", None).await;
+    let entity_resp = post(
+        client,
+        ENTITY,
+        &json!({ "transactions": validated["transactions"] }),
+    )
+    .await?;
+    let entities: Vec<CanonicalEntity> =
+        serde_json::from_value(entity_resp["canonical_entities"].clone()).unwrap_or_default();
+    save_entities(db, entities).await;
 
-            serde_json::from_value(
-                validated_json[
-                    "transactions"
-                ]
-                .clone()
-            )
-            .unwrap_or_default();
-
-        println!(
-            "Parsed {} validated transactions",
-            transactions.len()
-        );
-
-        // --------------------------------
-        // Save Transactions
-        // --------------------------------
-
-        save_transactions(
-    &db,
-    job.statement_id,
-    transactions,
-)
-.await;
-
-println!(
-    "Validated transactions saved successfully"
-);
-
-// --------------------------------
-// Entity Extraction Service
-// --------------------------------
-
-let entity_response =
-    client
-        .post(
-            "http://localhost:8003/resolve"
-        )
-        .json(
-            &serde_json::json!({
-                "transactions":
-                    validated_json[
-                        "transactions"
-                    ]
-            })
-        )
-        .send()
-        .await;
-
-match entity_response {
-
-    Ok(resp) => {
-
-        let entity_json: Value =
-            match resp.json().await {
-
-                Ok(data) => data,
-
-                Err(err) => {
-
-                    println!(
-                        "Failed to parse entity JSON: {}",
-                        err
-                    );
-
-                    continue;
-                }
-            };
-
-        println!(
-            "\n========== ENTITY OUTPUT ==========\n{}",
-            serde_json::to_string_pretty(
-                &entity_json
-            )
-            .unwrap()
-        );
-
-        let entities:
-            Vec<CanonicalEntity> =
-                serde_json::from_value(
-                    entity_json[
-                        "canonical_entities"
-                    ]
-                    .clone()
-                )
-                .unwrap_or_default();
-
-        println!(
-            "Parsed {} canonical entities",
-            entities.len()
-        );
-
-        save_entities(
-    &db,
-    entities,
-)
-.await;
-
-println!(
-    "Entities saved successfully"
-);
-
-// --------------------------------
-// Neo4j Graph Builder
-// --------------------------------
-
-// --------------------------------
-// Graph Intelligence (Phase 3) — DB-driven
-//
-// Transactions are already persisted above. The graph service reads the
-// WHOLE transaction network from Postgres (across all statements), builds
-// the money-flow graph, and returns money-flow + round-trips + clusters.
-// This is why loops/trails appear: they span the network, not one upload.
-// No Neo4j dependency for these results.
-// --------------------------------
-
-let graph_response =
-    client
-        .get(
-            "http://localhost:8005/flow/analyze/all"
-        )
-        .send()
-        .await;
-
-match graph_response {
-
-    Ok(resp) => {
-
-        match resp.json::<Value>().await {
-
-            Ok(graph_json) => {
-
-                println!(
-                    "\n========== GRAPH INTELLIGENCE (summary) ==========\n{}",
-                    serde_json::to_string_pretty(
-                        &graph_json["summary"]
-                    )
-                    .unwrap_or_default()
-                );
-
-                let trips =
-                    graph_json["round_trips"]
-                        .as_array()
-                        .map(|a| a.len())
-                        .unwrap_or(0);
-
-                let communities =
-                    graph_json["communities"]
-                        .as_array()
-                        .map(|a| a.len())
-                        .unwrap_or(0);
-
-                println!(
-                    "Round-trips: {} | Communities: {}",
-                    trips,
-                    communities
-                );
-            }
-
-            Err(err) => {
-                println!(
-                    "Failed to parse graph intelligence JSON: {}",
-                    err
-                );
-            }
+    // 6. graph intelligence (DB-driven, whole network) — best-effort
+    update_job(db, job.job_id, "processing", 85, "graph", None).await;
+    match get(client, GRAPH_ANALYZE).await {
+        Ok(g) => {
+            let trips = g["round_trips"].as_array().map(|a| a.len()).unwrap_or(0);
+            println!("Graph intelligence refreshed (round-trips: {})", trips);
         }
+        Err(e) => println!("Graph trigger failed (non-fatal): {}", e),
     }
 
-    Err(err) => {
-
-        println!(
-            "Graph Service Error: {}",
-            err
-        );
-    }
-}
-    }
-
-    Err(err) => {
-
-        println!(
-            "Entity Service Error: {}",
-            err
-        );
-    }
-}
-    }
-
-
-
-    Err(err) => {
-
-        println!(
-            "Validation Service Error: {}",
-            err
-        );
-    }
+    Ok(())
 }
 
-                        println!(
-                            "Transactions saved successfully"
-                        );
-
-                        println!(
-                            "\nStatus: completed"
-                        );
-                    }
-
-                    Err(err) => {
-
-                        println!(
-                            "Standardizer Error: {}",
-                            err
-                        );
-                    }
-                }
-            }
-
-            Err(err) => {
-
-                println!(
-                    "OCR Service Error: {}",
-                    err
-                );
-            }
-        }
+async fn post(client: &Client, url: &str, body: &Value) -> Result<Value, String> {
+    let resp = client
+        .post(url)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| format!("{} request error: {}", url, e))?;
+    if !resp.status().is_success() {
+        return Err(format!("{} returned {}", url, resp.status()));
     }
+    resp.json::<Value>()
+        .await
+        .map_err(|e| format!("{} bad JSON: {}", url, e))
+}
+
+async fn get(client: &Client, url: &str) -> Result<Value, String> {
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("{} request error: {}", url, e))?;
+    if !resp.status().is_success() {
+        return Err(format!("{} returned {}", url, resp.status()));
+    }
+    resp.json::<Value>()
+        .await
+        .map_err(|e| format!("{} bad JSON: {}", url, e))
 }

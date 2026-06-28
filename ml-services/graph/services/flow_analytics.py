@@ -36,10 +36,14 @@ def detect_round_trips(engine, max_len: int = 6, max_results: int = 200):
                 if nxt == start and len(path) >= 2:
                     results.append(_build_cycle(engine, path))
                     if len(results) >= max_results:
+                        for i, c in enumerate(results):
+                            c["id"] = i
                         return results
                 elif nxt not in path and len(path) <= max_len:
                     stack.append((nxt, path + [nxt]))
     results.sort(key=lambda c: c["min_amount"], reverse=True)
+    for i, c in enumerate(results):
+        c["id"] = i                 # stable chain id for explanation lookups
     return results
 
 

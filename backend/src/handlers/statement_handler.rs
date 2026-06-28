@@ -1,127 +1,88 @@
 use axum::{
-    extract::{
-        Multipart,
-        Path,
-        State,
-    },
-    Json,
+    extract::{Multipart, Path, Query, State},
 };
-
-use axum::http::StatusCode;
-
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
-    models::statement::{
-        ProcessingJob,
-        StatusResponse,
-        UploadResponse,
+    api::{ApiResponse, ApiResult, AppError, Pagination},
+    models::statement::ProcessingJob,
+    repositories::{
+        job_repository::insert_job,
+        read_repository,
+        statement::insert_statement,
     },
-    repositories::statement::insert_statement,
     services::storage::create_statement_directory,
     state::app_state::AppState,
 };
 
+const ALLOWED_EXT: [&str; 9] =
+    ["pdf", "csv", "xlsx", "xls", "docx", "txt", "png", "jpg", "jpeg"];
+
+/// POST /api/v1/statements/upload  (multipart: file, optional bank_name)
 pub async fn upload_statement(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Json<UploadResponse> {
-
-    let mut bank_name: Option<String> = None;
-
+) -> ApiResult<Value> {
     let statement_id = Uuid::new_v4();
     let job_id = Uuid::new_v4();
 
-    let mut filename = String::from("unknown");
+    let mut bank_name: Option<String> = None;
+    let mut filename = String::from("statement");
+    let mut saved_path: Option<std::path::PathBuf> = None;
 
-    let mut saved_file_path: Option<std::path::PathBuf> = None;
-
-    while let Some(field) =
-        multipart
-            .next_field()
-            .await
-            .expect(
-                "Failed to read multipart field"
-            )
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::Validation(format!("invalid multipart: {}", e)))?
     {
-
-        if field.name() == Some("bank_name") {
-
-            let value =
-                field.text().await.expect(
-                    "Failed to read bank name"
-                );
-
-            bank_name = Some(value);
-
-            continue;
-        }
-
-        if field.name() == Some("file") {
-
-            filename = field
-                .file_name()
-                .unwrap_or("statement")
-                .to_string();
-
-            // Validate by file EXTENSION (clients set content-types
-            // inconsistently; the OCR parser registry keys on extension anyway).
-            // NOTE: panic here is temporary — Phase 0 replaces it with a typed
-            // 415 error in the standard response envelope.
-            let extension = std::path::Path::new(&filename)
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_lowercase())
-                .unwrap_or_default();
-
-            let allowed_extensions = [
-                "pdf", "csv", "xlsx", "xls", "docx",
-                "txt", "png", "jpg", "jpeg",
-            ];
-
-            if !allowed_extensions.contains(&extension.as_str()) {
-
-                panic!(
-                    "Unsupported file type: {}",
-                    extension
-                );
+        match field.name() {
+            Some("bank_name") => {
+                bank_name = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::Validation(format!("bad bank_name: {}", e)))
+                    .ok();
             }
+            Some("file") => {
+                filename = field
+                    .file_name()
+                    .unwrap_or("statement")
+                    .to_string();
 
-            let bytes = field
-                .bytes()
-                .await
-                .expect(
-                    "Failed to read uploaded file"
-                );
+                let ext = std::path::Path::new(&filename)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
+                    .unwrap_or_default();
 
-            let directory =
-                create_statement_directory(
-                    statement_id
-                )
-                .await
-                .expect(
-                    "Failed to create statement directory"
-                );
+                if !ALLOWED_EXT.contains(&ext.as_str()) {
+                    return Err(AppError::UnsupportedMediaType(format!(
+                        "unsupported file type: '{}'. Allowed: {:?}",
+                        ext, ALLOWED_EXT
+                    )));
+                }
 
-            let file_path =
-                directory.join(&filename);
+                let bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|e| AppError::Validation(format!("failed to read file: {}", e)))?;
 
-            tokio::fs::write(
-                &file_path,
-                bytes,
-            )
-            .await
-            .expect(
-                "Failed to save uploaded file"
-            );
-
-            saved_file_path = Some(file_path);
+                let dir = create_statement_directory(statement_id)
+                    .await
+                    .map_err(|e| AppError::Internal(format!("storage error: {}", e)))?;
+                let path = dir.join(&filename);
+                tokio::fs::write(&path, bytes)
+                    .await
+                    .map_err(|e| AppError::Internal(format!("failed to save file: {}", e)))?;
+                saved_path = Some(path);
+            }
+            _ => {}
         }
     }
 
-    let file_path =
-        saved_file_path
-            .expect("No file uploaded");
+    let file_path = saved_path
+        .ok_or_else(|| AppError::Validation("no 'file' field in upload".into()))?;
 
     insert_statement(
         &state.db,
@@ -131,62 +92,68 @@ pub async fn upload_statement(
         file_path.to_string_lossy().to_string(),
     )
     .await
-    .expect(
-        "Failed to insert statement into database"
-    );
+    .map_err(|e| AppError::Internal(format!("db insert failed: {}", e)))?;
+
+    insert_job(&state.db, job_id, statement_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("job insert failed: {}", e)))?;
 
     let job = ProcessingJob {
         job_id,
         statement_id,
-        file_path: file_path
-            .to_string_lossy()
-            .to_string(),
+        file_path: file_path.to_string_lossy().to_string(),
     };
-
     state
         .job_sender
         .send(job)
         .await
-        .expect(
-            "Failed to enqueue processing job"
-        );
+        .map_err(|e| AppError::Internal(format!("failed to enqueue: {}", e)))?;
 
-    state
-        .job_status
-        .write()
-        .await
-        .insert(
-            job_id,
-            String::from("queued"),
-        );
-
-    Json(UploadResponse {
-        job_id,
-        statement_id,
-        status: String::from("queued"),
-    })
+    Ok(ApiResponse::success(json!({
+        "job_id": job_id,
+        "statement_id": statement_id,
+        "status": "queued"
+    })))
 }
 
-
-pub async fn get_status(
-    Path(job_id): Path<Uuid>,
+/// GET /api/v1/statements
+pub async fn list_statements(
     State(state): State<AppState>,
-) -> Json<StatusResponse> {
+    Query(page): Query<Pagination>,
+) -> ApiResult<Vec<Value>> {
+    let total = read_repository::count_statements(&state.db).await?;
+    let items =
+        read_repository::list_statements(&state.db, page.page_size(), page.offset()).await?;
+    Ok(ApiResponse::success_paginated(items, page.meta(total)))
+}
 
-    let status = state
-        .job_status
-        .read()
-        .await
-        .get(&job_id)
-        .cloned()
-        .unwrap_or_else(|| {
-            String::from("unknown")
-        });
+/// GET /api/v1/statements/{id}
+pub async fn get_statement(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Value> {
+    let s = read_repository::get_statement(&state.db, &id).await?;
+    Ok(ApiResponse::success(s))
+}
 
-    Json(StatusResponse {
-        job_id,
-        status,
-        progress: 0,
-        error: None,
-    })
+/// GET /api/v1/statements/{id}/transactions
+pub async fn get_transactions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(page): Query<Pagination>,
+) -> ApiResult<Vec<Value>> {
+    let total = read_repository::count_transactions(&state.db, &id).await?;
+    let items =
+        read_repository::list_transactions(&state.db, &id, page.page_size(), page.offset())
+            .await?;
+    Ok(ApiResponse::success_paginated(items, page.meta(total)))
+}
+
+/// GET /api/v1/statements/{id}/validation-report
+pub async fn get_validation_report(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Value> {
+    let report = read_repository::validation_report(&state.db, &id).await?;
+    Ok(ApiResponse::success(report))
 }

@@ -1,3 +1,4 @@
+mod api;
 mod config;
 mod routes;
 mod handlers;
@@ -21,11 +22,14 @@ use tokio::{
     },
 };
 
+use tower_http::cors::CorsLayer;
+
 use routes::{
+    api_routes::api_routes,
     health_routes::health_routes,
-    statement_routes::statement_routes,
 };
 
+use config::service_config::ServiceConfig;
 use services::worker::start_worker;
 
 use state::{
@@ -142,12 +146,18 @@ async fn main() {
         http_client: reqwest::Client::new(),
         job_sender,
         job_status,
+        services: ServiceConfig::from_env(),
     };
 
-    // Build router
+    // CORS so the frontend (different origin/port) can call the backend.
+    // Permissive in dev; tighten with allow_origin(...) for production.
+    let cors = CorsLayer::permissive();
+
+    // Build router (root health routes + versioned /api/v1 surface + /docs)
     let app = Router::new()
         .merge(health_routes())
-        .merge(statement_routes())
+        .merge(api_routes())
+        .layer(cors)
         .with_state(app_state);
 
     // Start server
