@@ -56,8 +56,8 @@ class PDFProvider(DocumentProvider):
 
         for page_idx, page in enumerate(doc):
             tables = page.find_tables()
-            if tables:
-                for table in tables:
+            if tables and tables.tables:
+                for table in tables.tables:
                     raw_table_data = table.extract()
                     if raw_table_data and len(raw_table_data) > 1:
                         headers = [str(cell).strip().lower() for cell in raw_table_data[0] if cell is not None]

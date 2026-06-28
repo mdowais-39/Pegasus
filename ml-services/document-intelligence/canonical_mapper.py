@@ -7,13 +7,12 @@ from schemas.document import DocumentIR, CanonicalDocument
 
 class CanonicalMapper:
     def parse_date(self, val: Any) -> Optional[datetime]:
-        if not val:
+        if not val or pd_isna(val):
             return None
         if isinstance(val, datetime):
             return val
         
         val_str = str(val).strip()
-        # Try split on time if present
         if "t" in val_str.lower():
             val_str = val_str.lower().split("t")[0]
         elif " " in val_str:
@@ -33,7 +32,6 @@ class CanonicalMapper:
             except ValueError:
                 continue
                 
-        # Regex fallback
         match = re.search(r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})", val_str)
         if match:
             day, month, year = match.groups()
@@ -47,13 +45,12 @@ class CanonicalMapper:
         return None
 
     def parse_float(self, val: Any) -> Optional[float]:
-        if val is None or val == "":
+        if val is None or val == "" or pd_isna(val):
             return None
         if isinstance(val, (int, float)):
             return float(val)
             
         val_str = str(val).strip().replace(",", "")
-        # Strip Cr/Dr markers if present
         val_str = val_str.lower().replace("cr", "").replace("dr", "").strip()
         
         val_str = re.sub(r"[^\d.-]", "", val_str)
@@ -72,6 +69,10 @@ class CanonicalMapper:
             for key in keys:
                 if key in norm_meta:
                     return norm_meta[key]
+            for key in keys:
+                for norm_key in norm_meta:
+                    if key in norm_key:
+                        return norm_meta[norm_key]
             return None
 
         account_holder = find_field(["account_holder", "account_name", "customer_name", "name", "holder_name"]) or "Unknown Holder"
@@ -106,15 +107,24 @@ class CanonicalMapper:
     def map_transactions(self, raw_txs: List[Dict[str, Any]], source_file: str, bank_name: str) -> List[CanonicalTransaction]:
         mapped = []
         for tx in raw_txs:
-            norm_tx = {str(k).lower().replace(" ", "_").replace(".", "").replace("/", "_"): v for k, v in tx.items()}
+            # Normalize keys, replacing whitespace and newlines with underscores
+            norm_tx = {str(k).lower().replace(" ", "_").replace("\n", "_").replace(".", "").replace("/", "_"): v for k, v in tx.items()}
             
             def find_field(keys: List[str]) -> Optional[Any]:
+                # 1. Exact match
                 for key in keys:
                     if key in norm_tx:
                         return norm_tx[key]
+                # 2. Fuzzy substring match
+                for key in keys:
+                    for norm_key in norm_tx:
+                        if key in norm_key:
+                            if key == "date" and "value_date" in norm_key:
+                                continue
+                            return norm_tx[norm_key]
                 return None
 
-            tx_date_raw = find_field(["transaction_date", "date", "txn_date", "trans_date", "trans_dt", "date_dt", "txn_dt"])
+            tx_date_raw = find_field(["transaction_date", "tran_date", "txn_date", "trans_date", "trans_dt", "date_dt", "txn_dt", "date"])
             tx_date = self.parse_date(tx_date_raw)
             if not tx_date:
                 continue
@@ -122,7 +132,7 @@ class CanonicalMapper:
             val_date_raw = find_field(["value_date", "val_date", "value_dt", "val_dt"])
             val_date = self.parse_date(val_date_raw) or tx_date
 
-            narration = find_field(["narration", "description", "particulars", "remarks", "desc", "transaction_particulars", "raw_text"]) or ""
+            narration = find_field(["narration", "description", "particulars", "remarks", "desc", "transaction_particulars", "raw_text", "particular"]) or ""
             
             debit = self.parse_float(find_field(["debit", "withdrawal", "withdrawals", "amount_debit", "dr"]))
             credit = self.parse_float(find_field(["credit", "deposit", "deposits", "amount_credit", "cr"]))
@@ -169,3 +179,10 @@ class CanonicalMapper:
         from validation import ValidationEngine
         val_engine = ValidationEngine()
         return val_engine.validate(meta, txs, base_confidence=ir.confidence)
+
+def pd_isna(val: Any) -> bool:
+    try:
+        import pandas as pd
+        return pd.isna(val)
+    except Exception:
+        return val is None
