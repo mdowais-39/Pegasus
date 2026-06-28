@@ -32,6 +32,9 @@ class DocumentIntelligenceOrchestrator:
         try:
             ir = provider.extract(file_path)
             doc = self.mapper.map_document(ir)
+            # Trigger fallback if no transactions are parsed
+            if len(doc.transactions) == 0 and provider.__class__.__name__ != "LegacyProvider":
+                raise ValueError("No transactions extracted by primary provider")
             return doc
         except Exception as e:
             print(f"[ORCHESTRATOR] [WARNING] Provider {provider.__class__.__name__} failed with error: {e}. Falling back to LegacyProvider...")
