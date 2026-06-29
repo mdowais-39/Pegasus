@@ -53,3 +53,9 @@ graphify-out/
 *.pdf
 *.png
 *.jpg
+
+
+artifacts/
+scratch/
+benchmark_report.json
+
