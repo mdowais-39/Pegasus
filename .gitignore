@@ -40,3 +40,16 @@ datasets/
 
 # Local frontend copy for backend-only development
 frontend/
+
+
+# Graphify
+datasets/
+frontend/node_modules/
+frontend/dist/
+graphify-out/
+*.csv
+*.parquet
+*.joblib
+*.pdf
+*.png
+*.jpg
