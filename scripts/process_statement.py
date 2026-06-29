@@ -122,10 +122,12 @@ def main():
     parser.add_argument("--input", type=str, help="Path to input statement file or directory")
     parser.add_argument("--dir", action="store_true", help="Process directory flag")
     parser.add_argument("--inspect", type=str, help="Document name (without extension) to inspect")
-    parser.add_argument("--output-dir", type=str, default="artifacts/standardized", help="Destination folder for standardized outputs")
+    parser.add_argument("--output-root", "--output-dir", dest="output_root", type=str, default="artifacts/standardized", help="Destination folder for standardized outputs")
     
     args = parser.parse_args()
-    output_root = root_dir / args.output_dir
+    output_root = Path(args.output_root)
+    if not output_root.is_absolute():
+        output_root = root_dir / output_root
     output_root.mkdir(parents=True, exist_ok=True)
     
     if args.inspect:
