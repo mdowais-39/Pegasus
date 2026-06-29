@@ -1,0 +1,11 @@
+datasets/
+.venv/
+frontend/node_modules/
+frontend/dist/
+graphify-out/
+*.csv
+*.parquet
+*.joblib
+*.pdf
+*.png
+*.jpg
