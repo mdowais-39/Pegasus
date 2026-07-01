@@ -66,7 +66,8 @@ Two ways data is produced:
 
 ### 3.1 One-time
 - PostgreSQL running with DB `finintel` (user/pass `postgres`/`postgres`).
-- Apply migrations (creates `statements, transactions, entities, risk_profiles, jobs`):
+- Apply migrations (creates `statements, transactions, entities, risk_profiles,
+  jobs, analysis_cache`):
   ```
   cd backend
   sqlx migrate run      # or: psql -U postgres -d finintel -f each migrations/*.sql
@@ -74,6 +75,14 @@ Two ways data is produced:
 - Python env (conda `finintel`) with the project deps. Extra for reports:
   `pip install reportlab` (openpyxl + python-docx already present).
 - Rust toolchain for the gateway.
+
+### 3.1a Start everything with one command (recommended)
+```
+./scripts/start-all.ps1        # Windows / PowerShell
+./scripts/start-all.sh         # Linux / macOS / Git-Bash
+```
+Launches all 9 ML services + the gateway. (Sections 3.2/3.3 below are the manual
+equivalent.)
 
 ### 3.2 Start the Python services (each in its folder)
 ```
@@ -122,10 +131,20 @@ Background worker (job → processing):
         save        → INSERT transactions (with validation columns)
    65%  entities    → POST 8003/resolve        → canonical_entities
         save        → UPSERT entities
-   85%  graph       → GET 8005/flow/analyze/all → refresh whole-network graph
+   85%  graph       → GET 8005/flow/analyze/all?refresh=true  → recompute + PERSIST
+                      (money-flow, round-trips, clusters cached in analysis_cache)
+        risk        → GET 8005/risk/top?refresh=true          → recompute + PERSIST
+                      (risk fusion pulls anomaly:8007 + temporal:8008 here)
    100% completed   (jobs.status=completed, statements.status=completed)
    on any error → jobs.status=failed, jobs.error set
 ```
+
+> **Persistence:** the worker refreshes and caches the whole-network analysis +
+> risk after every upload. Read endpoints (`/flow/*`, `/risk/*`,
+> `/investigation/top-suspicious`) then serve the persisted `analysis_cache`
+> result instantly; append `?refresh=true` to force a recompute. Anomaly and
+> temporal are **consumed during the risk refresh step** (not separate worker
+> stages).
 
 ### Step-by-step test
 1. **Upload**
@@ -264,6 +283,14 @@ communities, **risk fusion**, **investigation views**, **explainability**.
 | `/explain/account/{acct}` · `/explain/round-trips` · `/explain/round-trip/{chain_id}` | narratives + evidence |
 
 **Stateless (POST `{account?, transactions}`):** `/flow/analyze`, `/flow/money-flow`, `/flow/round-trips`, `/flow/clusters` — test without a DB.
+**Persistence:** the whole-network `analyze` and `risk` are cached in
+`analysis_cache`. All DB-driven GETs above accept **`?refresh=true`** to
+recompute + re-cache (otherwise they serve the cached result instantly). The
+upload worker refreshes both after each upload.
+**Round-trips:** when the graph has many cycles, the detector scans a pool and
+returns the **top `max_results` by bottleneck amount** (a `scan_capped` flag
+marks when the pool limit was hit) — the most significant loops, not an
+arbitrary subset.
 **View:** Swagger at `http://localhost:8005/docs`.
 **Offline tests:** `python -B test_flow.py · test_risk.py · test_investigation.py · test_explainability.py`.
 
@@ -271,10 +298,13 @@ communities, **risk fusion**, **investigation views**, **explainability**.
 **Does:** per-account statistical (isolation forest → `stat_score`) and temporal
 (burst/velocity/structuring → `temporal_score`) signals. These are **merged into
 risk fusion** by the graph service (`/risk/*`).
-**Endpoints:** `GET /anomaly`, `/anomaly/account/{acct}`; `GET /temporal/latest`,
+**Endpoints:** `GET /anomaly` (whole dataset), `/anomaly/latest`,
+`/anomaly/account/{acct}`; `GET /temporal` (whole dataset), `/temporal/latest`,
 `/temporal/account/{acct}` → `{results:[{account, stat_score|temporal_score, patterns}]}`.
-**Note:** these currently score multi-account (sender/receiver) data; coverage of
-real single-account statements is a known enhancement.
+**Coverage:** both now score **all accounts** — the whole-dataset loaders fill
+`sender_account` with the statement holder when null, so real single-account
+statements are covered (not just multi-account/investigation data). The graph
+risk fusion consumes `GET /anomaly` + `GET /temporal`.
 
 ### 5.7 Trail — :8009  (Core Req 5, graded)
 **Does:** **FIFO money-trail** — each credit opens a lot; debits consume oldest
@@ -290,6 +320,12 @@ lookup for a debit) · `/trail/account/{acct}` · `/trail/statement/{id}` · `PO
 PDF / DOCX** with Executive Summary, Top Suspicious Accounts, Round-Trips, Money
 Flow, Entities, Recommendations.
 **Endpoints:** `GET /report/{case_id}/{json|excel|pdf|docx}`.
+**Scoping (all 4 formats):** every format calls the same `build(case_id)` —
+`case_id="all"` = whole network; a **statement UUID** scopes counts/validation to
+that statement and pulls `/flow/analyze/statement/{id}`. So JSON, Excel, PDF and
+DOCX are all scoped consistently by `case_id`.
+**Persistence:** the assembled report is cached in `analysis_cache` per
+`case_id`; append `?refresh=true` to rebuild.
 **View (gateway):** `GET /api/v1/reports/{case_id}/{json|pdf|excel|docx}` (binary
 formats download via `Content-Disposition`).
 
@@ -367,10 +403,13 @@ if the console chokes on the ₹ symbol.)
 | Job `failed` | Check `jobs.error` and the `cargo run` console; usually an upstream service is down |
 | `/standardize` 422 / 500 | An upstream parser returned no/odd rows — check `/extract` output for that file |
 | Graph endpoints empty | No transactions in DB yet, or graph service (8005) down |
-| `/risk/*` missing temporal/anomaly factors | Services 8007/8008 not running, or data is single-account (known coverage gap) |
+| `/risk/*` missing temporal/anomaly factors | Services 8007/8008 not running |
+| `GET /anomaly` 500 (`no attribute 'process'`) | Fixed — restart the anomaly service to pick it up |
+| Stale analysis after new upload | Cache serves last snapshot; append `?refresh=true`, or the worker refreshes on the next upload |
 | Report `/pdf` returns 501 | `pip install reportlab` in the report service env |
+| Report shows whole-network for a specific case | Fixed — pass a **statement UUID** as `case_id` (all 4 formats scope) |
 | `/services/health` shows graph degraded | Cosmetic: legacy `config/services.rs` ports differ from real ports |
-| Round-trips capped at 200 | `max_results` cap in `detect_round_trips` (raise if needed) |
+| Round-trips seem truncated | Detector keeps top `max_results` by amount (`scan_capped=true` when the scan pool was hit); raise `max_results`/`scan_limit` if needed |
 
 ---
 
@@ -381,16 +420,20 @@ if the console chokes on the ₹ symbol.)
 - **entities** — id, entity_type, identifier (unique), display_name, metadata (aliases+confidence)
 - **jobs** — id, statement_id, status, progress, stage, error, created/updated_at
 - **risk_profiles** — entity_id, rule/stat/temporal/graph/gnn/final scores, risk_level, patterns
+- **analysis_cache** — scope (`all`|statement-uuid), kind (`analyze`|`risk`|`report`), payload (JSONB), computed_at — persisted analysis so results aren't recomputed each request
 
 ---
 
-## 11. Notes & current limitations
-- Analysis results (graph/risk/report) are **recomputed on demand**, not yet
-  persisted — fine for correctness, a future optimization.
-- Anomaly/temporal cover multi-account data best; single-account coverage is a
-  planned enhancement.
+## 11. Notes & current state
+- Analysis results (graph/risk/report) are now **persisted** in `analysis_cache`
+  and refreshed by the upload worker; append `?refresh=true` to force recompute.
+- Anomaly/temporal now score **all accounts** (whole-dataset loaders fill the
+  holder account), and are consumed by risk fusion.
+- Reports are **scoped by `case_id`** across all formats (JSON/Excel/PDF/DOCX).
 - Neo4j is **optional** — all current analysis is in-memory/DB-driven; the legacy
   `/build-graph` Neo4j routes remain but are not in the pipeline.
 - `case_id`: use `all` for the whole network; a statement UUID scopes
-  round-trips/money-flow/clusters.
+  round-trips/money-flow/clusters and reports.
+- Known follow-up: anomaly `feature_builder` yields `NaN` std for single-txn
+  accounts — add `fillna(0)` in the isolation detector if it surfaces.
 ```
