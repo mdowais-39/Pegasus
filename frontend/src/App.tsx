@@ -8,6 +8,7 @@ import RoundTripsPage from "./components/RoundTripsPage";
 import MoneyTrailPage from "./components/MoneyTrailPage";
 import ReportsPage from "./components/ReportsPage";
 import SettingsPage from "./components/SettingsPage";
+import { FinintelDataProvider } from "./context/FinintelDataContext";
 
 export default function App() {
   const navigate = useNavigate();
@@ -22,29 +23,31 @@ export default function App() {
   };
 
   return (
-    <Routes>
-      {/* Public Landing Page */}
-      <Route path="/" element={
-        <div id="app-root" className="min-h-screen bg-[#050505] antialiased">
-          <Demo onEnter={handleEnterPlatform} />
-        </div>
-      } />
+    <FinintelDataProvider>
+      <Routes>
+        {/* Public Landing Page */}
+        <Route path="/" element={
+          <div id="app-root" className="min-h-screen bg-[#050505] antialiased">
+            <Demo onEnter={handleEnterPlatform} />
+          </div>
+        } />
 
-      {/* Authentication Layer */}
-      <Route path="/login" element={<LoginPage />} />
+        {/* Authentication Layer */}
+        <Route path="/login" element={<LoginPage />} />
 
-      {/* Authenticated Workspace */}
-      <Route path="/workspace" element={<WorkspaceLayout />}>
-        <Route index element={<OverviewPage onNavigateToView={(view) => navigate(`/workspace/${view}`)} />} />
-        <Route path="round-trips" element={<RoundTripsPage onNavigateToView={(view) => navigate(`/workspace/${view}`)} />} />
-        <Route path="money-flow" element={<MoneyFlowPage />} />
-        <Route path="money-trails" element={<MoneyTrailPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+        {/* Authenticated Workspace */}
+        <Route path="/workspace" element={<WorkspaceLayout />}>
+          <Route index element={<OverviewPage onNavigateToView={(view) => navigate(`/workspace/${view}`)} />} />
+          <Route path="round-trips" element={<RoundTripsPage onNavigateToView={(view) => navigate(`/workspace/${view}`)} />} />
+          <Route path="money-flow" element={<MoneyFlowPage />} />
+          <Route path="money-trails" element={<MoneyTrailPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
 
-      {/* Fallback Redirect */}
-      <Route path="*" element={<LoginPage />} />
-    </Routes>
+        {/* Fallback Redirect */}
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    </FinintelDataProvider>
   );
 }

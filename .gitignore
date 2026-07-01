@@ -268,3 +268,8 @@ __pycache__/
 *.pyo
 *.pyd
 target/
+
+
+# Rust
+backend/target/
+**/target/

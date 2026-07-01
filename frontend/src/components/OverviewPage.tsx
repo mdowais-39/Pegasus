@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   UploadCloud, 
   FileText, 
@@ -14,38 +14,28 @@ import {
   Eraser,
   FileSpreadsheet,
   FileDown,
-  Coins,
   ShieldCheck,
   AlertCircle
 } from 'lucide-react';
+import { useFinintelData } from '../context/FinintelDataContext';
+import { uploadStatement, getJobStatus, getStatementValidationReport, getStatementTransactions } from '../services/finintelApi';
+import { ValidationReport, BackendTransaction } from '../types/api';
 
-interface OverviewPageProps {
-  onNavigateToView: (view: string) => void;
-}
-
-interface EvidenceFile {
-  id: string;
-  name: string;
-  size: string;
-  type: string;
-  status: 'Ready' | 'Processing';
-  rowCount: number;
-}
-
-type NodeStatus = 'queued' | 'running' | 'complete';
+type NodeStatus = 'queued' | 'running' | 'complete' | 'failed';
 
 const nodeCoords: Record<string, { x: number; y: number }> = {
   upload: { x: 20, y: 190 },
   ocr: { x: 240, y: 190 },
   cleaning: { x: 460, y: 190 },
-  validation: { x: 680, y: 190 },
-  router: { x: 900, y: 190 },
-  loops: { x: 1120, y: 50 },
-  flow: { x: 1120, y: 190 },
-  trails: { x: 1120, y: 330 },
-  report: { x: 1340, y: 190 },
-  exportPdf: { x: 1560, y: 100 },
-  exportExcel: { x: 1560, y: 280 },
+  standardization: { x: 680, y: 190 },
+  validation: { x: 900, y: 190 },
+  database: { x: 1120, y: 190 },
+  loops: { x: 1340, y: 50 },
+  flow: { x: 1340, y: 190 },
+  trails: { x: 1340, y: 330 },
+  report: { x: 1560, y: 190 },
+  exportPdf: { x: 1780, y: 100 },
+  exportExcel: { x: 1780, y: 280 },
 };
 
 const getBezierPath = (startX: number, startY: number, endX: number, endY: number) => {
@@ -53,24 +43,46 @@ const getBezierPath = (startX: number, startY: number, endX: number, endY: numbe
   return `M ${startX} ${startY} C ${startX + horizontalOffset} ${startY}, ${endX - horizontalOffset} ${endY}, ${endX} ${endY}`;
 };
 
+interface OverviewPageProps {
+  onNavigateToView: (view: string) => void;
+}
+
 export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
-  // Configured with initial mock evidence files so there is active context right away
-  const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([
-    { id: 'EVID-001', name: 'Standard_Charter_Audit_Oct2026.csv', size: '2.4 MB', type: 'CSV', status: 'Ready', rowCount: 12042 },
-    { id: 'EVID-002', name: 'Seychelles_UBO_Extract.pdf', size: '1.1 MB', type: 'PDF', status: 'Ready', rowCount: 45 }
-  ]);
+  const { 
+    latestStatementId, 
+    setLatestStatementId, 
+    refreshStatements, 
+    caseSummary, 
+    refreshSummary,
+    setCaseId
+  } = useFinintelData();
 
   const [dragActive, setDragActive] = useState(false);
   const [pipelineStatus, setPipelineStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [activeLogMsg, setActiveLogMsg] = useState<string>('Ready to initiate diagnostics pipeline.');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Pending files list
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  
+  // Tracking current job running
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [currentStatementId, setCurrentStatementId] = useState<string | null>(null);
+  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Validation report and transactions states
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
+  const [transactions, setTransactions] = useState<BackendTransaction[]>([]);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   // Node individual execution states
   const [nodeStates, setNodeStates] = useState<Record<string, NodeStatus>>({
-    upload: 'complete', // Ready because initial mock files are present
+    upload: 'complete',
     ocr: 'queued',
     cleaning: 'queued',
+    standardization: 'queued',
     validation: 'queued',
-    router: 'queued',
+    database: 'queued',
     loops: 'queued',
     flow: 'queued',
     trails: 'queued',
@@ -79,10 +91,225 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
     exportExcel: 'queued',
   });
 
-  // Numeric details dynamically ticking during active engine steps
   const [ocrProgress, setOcrProgress] = useState<number>(0);
-  const [cleanedCount, setCleanedCount] = useState<number>(0);
-  const [validatedCount, setValidatedCount] = useState<number>(0);
+
+  // Map backend status and stage to visual nodes
+  const updateNodeStates = (status: string, stage: string | null, progress: number) => {
+    const states: Record<string, NodeStatus> = {
+      upload: 'complete',
+      ocr: 'queued',
+      cleaning: 'queued',
+      standardization: 'queued',
+      validation: 'queued',
+      database: 'queued',
+      loops: 'queued',
+      flow: 'queued',
+      trails: 'queued',
+      report: 'queued',
+      exportPdf: 'queued',
+      exportExcel: 'queued',
+    };
+
+    if (status === 'queued') {
+      states.ocr = 'running';
+    } else if (status === 'processing') {
+      states.upload = 'complete';
+      
+      const getStageOrder = (s: string | null): number => {
+        if (!s) return 0;
+        const order: Record<string, number> = {
+          'ocr': 1,
+          'standardize': 2,
+          'validate': 3,
+          'entities': 4,
+          'graph': 5
+        };
+        return order[s] || 0;
+      };
+
+      const order = getStageOrder(stage);
+
+      // OCR Node
+      if (order === 1) {
+        states.ocr = 'running';
+      } else if (order > 1) {
+        states.ocr = 'complete';
+      }
+
+      // Cleaning & Standardization
+      if (order === 2) {
+        states.cleaning = 'running';
+        states.standardization = 'running';
+      } else if (order > 2) {
+        states.cleaning = 'complete';
+        states.standardization = 'complete';
+      }
+
+      // Validation
+      if (order === 3) {
+        states.validation = 'running';
+      } else if (order > 3) {
+        states.validation = 'complete';
+      }
+
+      // DB Store (entities)
+      if (order === 4) {
+        states.database = 'running';
+      } else if (order > 4) {
+        states.database = 'complete';
+      }
+
+      // Downstream analysis (graph)
+      if (order === 5) {
+        states.loops = 'running';
+        states.flow = 'running';
+        states.trails = 'running';
+      }
+    } else if (status === 'completed') {
+      Object.keys(states).forEach(k => {
+        states[k] = 'complete';
+      });
+    } else if (status === 'failed') {
+      // Mark active node as failed
+      states.upload = 'complete';
+      if (stage === 'ocr') states.ocr = 'failed';
+      else if (stage === 'standardize') {
+        states.ocr = 'complete';
+        states.cleaning = 'failed';
+        states.standardization = 'failed';
+      } else if (stage === 'validate') {
+        states.ocr = 'complete';
+        states.cleaning = 'complete';
+        states.standardization = 'complete';
+        states.validation = 'failed';
+      } else if (stage === 'entities') {
+        states.ocr = 'complete';
+        states.cleaning = 'complete';
+        states.standardization = 'complete';
+        states.validation = 'complete';
+        states.database = 'failed';
+      } else if (stage === 'graph') {
+        states.ocr = 'complete';
+        states.cleaning = 'complete';
+        states.standardization = 'complete';
+        states.validation = 'complete';
+        states.database = 'complete';
+        states.loops = 'failed';
+        states.flow = 'failed';
+        states.trails = 'failed';
+      } else {
+        states.ocr = 'failed';
+      }
+    }
+    return states;
+  };
+
+  // Fetch report findings when validation or completed stages are reached
+  const fetchReportData = async (stmtId: string) => {
+    setIsLoadingReport(true);
+    try {
+      const [report, txs] = await Promise.all([
+        getStatementValidationReport(stmtId).catch(() => null),
+        getStatementTransactions(stmtId, 1, 100).catch(() => [])
+      ]);
+      if (report) setValidationReport(report);
+      if (txs) setTransactions(txs);
+    } catch (err) {
+      console.error("Failed to load pipeline results", err);
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
+
+  // Start polling backend job status
+  const startJobPolling = (jobId: string, stmtId: string) => {
+    if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+
+    pollingTimerRef.current = setInterval(async () => {
+      try {
+        const jobStatus = await getJobStatus(jobId);
+        setOcrProgress(jobStatus.progress);
+        
+        const nextStates = updateNodeStates(jobStatus.status, jobStatus.stage, jobStatus.progress);
+        setNodeStates(nextStates);
+
+        if (jobStatus.error) {
+          setErrorMsg(jobStatus.error);
+          setActiveLogMsg(`Job failed: ${jobStatus.error}`);
+          setPipelineStatus('idle');
+          if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+          return;
+        }
+
+        if (jobStatus.status === 'completed') {
+          setPipelineStatus('completed');
+          setActiveLogMsg("Forensics core diagnostic sequence terminated. Outputs verified.");
+          if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+          
+          // Refresh lists, summaries and reports
+          await refreshStatements();
+          setLatestStatementId(stmtId);
+          await refreshSummary(stmtId);
+          await fetchReportData(stmtId);
+        } else if (jobStatus.status === 'failed') {
+          setErrorMsg(jobStatus.error || "Job failed.");
+          setActiveLogMsg("Forensics sequence aborted due to gateway processing failure.");
+          setPipelineStatus('idle');
+          if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+        } else {
+          let stageLabel = 'Initializing';
+          if (jobStatus.stage === 'ocr') stageLabel = 'Optical Character Recognition';
+          else if (jobStatus.stage === 'standardize') stageLabel = 'Standardization & Purging';
+          else if (jobStatus.stage === 'validate') stageLabel = 'Validating compliance checks';
+          else if (jobStatus.stage === 'entities') stageLabel = 'Building SQL Database Store';
+          else if (jobStatus.stage === 'graph') stageLabel = 'Structuring circular flows';
+          
+          setActiveLogMsg(`Active Node: ${stageLabel} running (${jobStatus.progress}%)...`);
+
+          // Fetch intermediate reports if validation is reached
+          if (jobStatus.stage === 'validate' || jobStatus.stage === 'entities' || jobStatus.stage === 'graph') {
+            getStatementValidationReport(stmtId).then(setValidationReport).catch(() => {});
+          }
+          if (jobStatus.stage === 'entities' || jobStatus.stage === 'graph') {
+            getStatementTransactions(stmtId, 1, 100).then(setTransactions).catch(() => {});
+          }
+        }
+      } catch (err: any) {
+        console.error("Job status polling error:", err);
+      }
+    }, 1500);
+  };
+
+  // Clean up polling timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+    };
+  }, []);
+
+  // Fetch initial report data if there is an existing statement_id on mount
+  useEffect(() => {
+    if (latestStatementId) {
+      setPipelineStatus('completed');
+      fetchReportData(latestStatementId);
+      refreshSummary(latestStatementId);
+      
+      setNodeStates({
+        upload: 'complete',
+        ocr: 'complete',
+        cleaning: 'complete',
+        standardization: 'complete',
+        validation: 'complete',
+        database: 'complete',
+        loops: 'complete',
+        flow: 'complete',
+        trails: 'complete',
+        report: 'complete',
+        exportPdf: 'complete',
+        exportExcel: 'complete',
+      });
+    }
+  }, [latestStatementId]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -98,46 +325,69 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      addSimulatedFile(e.dataTransfer.files[0].name, e.dataTransfer.files[0].size);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
     }
   };
 
   const triggerSearchFile = () => {
     const fileSelector = document.createElement('input');
     fileSelector.type = 'file';
-    fileSelector.accept = '.pdf,.csv,.xlsx,.docx,image/*';
+    fileSelector.multiple = true;
+    fileSelector.accept = '.pdf,.csv,.xlsx,.xls,.docx,.txt,image/*';
     fileSelector.onchange = (e: any) => {
-      if (e.target.files && e.target.files[0]) {
-        addSimulatedFile(e.target.files[0].name, e.target.files[0].size);
+      if (e.target.files && e.target.files.length > 0) {
+        addFiles(e.target.files);
       }
     };
     fileSelector.click();
   };
 
-  const addSimulatedFile = (name: string, rawSize: number) => {
-    const sizeStr = rawSize > 1024 * 1024 
-      ? (rawSize / (1024 * 1024)).toFixed(1) + ' MB' 
-      : (rawSize / 1024).toFixed(0) + ' KB';
-    
-    const newFile: EvidenceFile = {
-      id: `EVID-00${evidenceFiles.length + 1}`,
-      name,
-      size: sizeStr || '482 KB',
-      type: name.split('.').pop()?.toUpperCase() || 'CSV',
-      status: 'Ready',
-      rowCount: Math.floor(Math.random() * 2400) + 120
-    };
-    setEvidenceFiles(prev => [...prev, newFile]);
-    setNodeStates(prev => ({
-      ...prev,
-      upload: 'complete'
-    }));
-    
-    // Reset pipeline to prompt clean diagnostic re-runs
+  const addFiles = (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    setPendingFiles(prev => [...prev, ...arr]);
     if (pipelineStatus === 'completed') {
       setPipelineStatus('idle');
       resetNodeStatesToInitial();
+    }
+  };
+
+  // Upload and execute the pipeline sequentially for all selected files
+  const executePipelineForPendingFiles = async () => {
+    if (pendingFiles.length === 0) return;
+    
+    setPipelineStatus('processing');
+    setErrorMsg(null);
+    resetNodeStatesToInitial();
+    setActiveLogMsg("Starting batch uploads to gateway...");
+
+    try {
+      let lastJobId = '';
+      let lastStmtId = '';
+      
+      for (let i = 0; i < pendingFiles.length; i++) {
+        const file = pendingFiles[i];
+        setActiveLogMsg(`Uploading [${i + 1}/${pendingFiles.length}]: ${file.name}...`);
+        const response = await uploadStatement(file);
+        lastJobId = response.job_id;
+        lastStmtId = response.statement_id;
+      }
+      
+      setCurrentJobId(lastJobId);
+      setCurrentStatementId(lastStmtId);
+      setLatestStatementId(lastStmtId);
+      setCaseId(lastStmtId);
+      
+      // Clear pending list now that uploads are in process
+      setPendingFiles([]);
+      
+      setActiveLogMsg(`Uploaded. Enqueueing forensics worker (Job ID: ${lastJobId})...`);
+      startJobPolling(lastJobId, lastStmtId);
+    } catch (err: any) {
+      console.error("Upload pipeline execution failed:", err);
+      setPipelineStatus('idle');
+      setErrorMsg(err.message || "Failed to process files. Verify gateway connection.");
+      setActiveLogMsg("Forensics sequence aborted due to upload error.");
     }
   };
 
@@ -146,8 +396,9 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
       upload: 'complete',
       ocr: 'queued',
       cleaning: 'queued',
+      standardization: 'queued',
       validation: 'queued',
-      router: 'queued',
+      database: 'queued',
       loops: 'queued',
       flow: 'queued',
       trails: 'queued',
@@ -156,112 +407,23 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
       exportExcel: 'queued',
     });
     setOcrProgress(0);
-    setCleanedCount(0);
-    setValidatedCount(0);
-    setActiveLogMsg('Ready to initiate diagnostics pipeline.');
+    setValidationReport(null);
+    setTransactions([]);
   };
 
-  // Run n8n-inspired sequential pipeline simulation with fine-grained real-time counts
-  const runForensicsPipeline = () => {
-    setPipelineStatus('processing');
-    
-    // Step 2: OCR Extraction
-    setNodeStates(prev => ({ ...prev, ocr: 'running' }));
-    setActiveLogMsg('Active Node: Starting Optical Character Recognition on PDF layer...');
-    
-    let ocrIntervalVal = 0;
-    const ocrTimer = setInterval(() => {
-      ocrIntervalVal += 10;
-      setOcrProgress(ocrIntervalVal);
-      if (ocrIntervalVal >= 100) {
-        clearInterval(ocrTimer);
-        setNodeStates(prev => ({ ...prev, ocr: 'complete', cleaning: 'running' }));
-        setActiveLogMsg('Active Node: Text recognized. Cleaning duplicate ledger tracks...');
-        triggerCleaningStep();
-      }
-    }, 150);
-  };
-
-  const triggerCleaningStep = () => {
-    let cleanVal = 0;
-    const cleanTimer = setInterval(() => {
-      cleanVal += 12;
-      if (cleanVal >= 132) {
-        setCleanedCount(132);
-        clearInterval(cleanTimer);
-        setNodeStates(prev => ({ ...prev, cleaning: 'complete', validation: 'running' }));
-        setActiveLogMsg('Active Node: Duplicates purged. Validating structure definitions...');
-        triggerValidationStep();
-      } else {
-        setCleanedCount(cleanVal);
-      }
-    }, 100);
-  };
-
-  const triggerValidationStep = () => {
-    let validVal = 0;
-    const valTimer = setInterval(() => {
-      validVal += 1000;
-      if (validVal >= 12042) {
-        setValidatedCount(12042);
-        clearInterval(valTimer);
-        setNodeStates(prev => ({ ...prev, validation: 'complete', router: 'running' }));
-        setActiveLogMsg('Active Node: Financial audit constraints confirmed. Framing routing matrices...');
-        triggerRouterStep();
-      } else {
-        setValidatedCount(validVal);
-      }
-    }, 120);
-  };
-
-  const triggerRouterStep = () => {
-    setTimeout(() => {
-      // Complete router and start parent loops, flow, and trails simultaneously (Parallel branches!)
-      setNodeStates(prev => ({
-        ...prev,
-        router: 'complete',
-        loops: 'running',
-        flow: 'running',
-        trails: 'running'
-      }));
-      setActiveLogMsg('Active Nodes: Router branching! Tracking parallel flow networks...');
-      
-      triggerParallelSteps();
-    }, 1200);
-  };
-
-  const triggerParallelSteps = () => {
-    setTimeout(() => {
-      setNodeStates(prev => ({
-        ...prev,
-        loops: 'complete',
-        flow: 'complete',
-        trails: 'complete',
-        report: 'running'
-      }));
-      setActiveLogMsg('Active Node: Network layers synthesized. Generating consolidated PDF brief...');
-      
-      triggerReportStep();
-    }, 1800);
-  };
-
-  const triggerReportStep = () => {
-    setTimeout(() => {
-      setNodeStates(prev => ({
-        ...prev,
-        report: 'complete',
-        exportPdf: 'complete',
-        exportExcel: 'complete'
-      }));
-      setPipelineStatus('completed');
-      setActiveLogMsg('Forensics core diagnostic sequence terminated. Outputs verified.');
-    }, 1400);
+  // Format bytes helper
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-12 animate-fade-in select-none">
+    <div className="max-w-7xl mx-auto px-6 py-10 space-y-12 animate-fade-in select-none">
       
-      {/* Inline custom styles for dynamic flow simulation (100% compliant and self-contained) */}
+      {/* Dynamic flow styling */}
       <style>{`
         @keyframes flowingPath {
           from { stroke-dashoffset: 24; }
@@ -330,36 +492,61 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           </div>
         </div>
 
-        {/* Small Uploaded File Cards */}
-        {evidenceFiles.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            {evidenceFiles.map(file => (
-              <div 
-                key={file.id} 
-                className="bg-white border border-[#E4E4E7] p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
-                    <FileText className="w-4 h-4" />
+        {/* Selected Pending Files with red X button */}
+        {pendingFiles.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {pendingFiles.map((file, idx) => (
+                <div 
+                  key={idx} 
+                  className="bg-white border border-[#E4E4E7] p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all relative shadow-[0_2px_6px_rgba(0,0,0,0.01)]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-[#18181B] truncate pr-4">{file.name}</h3>
+                      <p className="text-[10px] text-[#71717A] mt-0.5 font-light">
+                        {formatBytes(file.size)} • Ready to process
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-bold text-[#18181B] truncate">{file.name}</h3>
-                    <p className="text-[10px] text-[#71717A] mt-0.5 font-light">
-                      {file.rowCount.toLocaleString()} transactions • {file.size}
-                    </p>
-                  </div>
+                  
+                  {/* Delete button (small red x in top right corner) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+                    }}
+                    className="absolute -top-1.5 -right-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
+                    title="Remove file"
+                  >
+                    ×
+                  </button>
                 </div>
-                <div className="shrink-0 flex items-center gap-1 text-[9px] font-bold text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0] px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  <span className="w-1 h-1 bg-[#10B981] rounded-full inline-block"></span>
-                  Ready
-                </div>
+              ))}
+            </div>
+
+            {/* Manual Start Pipeline Trigger Button */}
+            {pipelineStatus === 'idle' && (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={executePipelineForPendingFiles}
+                  className="px-6 py-2.5 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md hover:shadow-lg focus:outline-none"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>Start Forensic Analysis Pipeline ({pendingFiles.length} {pendingFiles.length === 1 ? 'file' : 'files'})</span>
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
-      {/* SECTION 2: INTERACTIVE VISUAL WORKFLOW PIPELINE (n8n styled canvas) */}
+      {/* SECTION 2: INTERACTIVE VISUAL WORKFLOW CANVASES */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="space-y-1">
@@ -381,27 +568,22 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
               <span className="truncate font-light text-[11px]">{activeLogMsg}</span>
             </div>
 
-            {pipelineStatus === 'idle' && (
-              <button
-                onClick={runForensicsPipeline}
-                className="w-full sm:w-auto px-4 py-1.8 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-              >
-                <Play className="w-3.5 h-3.5 fill-white" />
-                <span>Execute Diagnostic Blueprint</span>
-              </button>
-            )}
-
-            {pipelineStatus === 'processing' && (
-              <div className="w-full sm:w-auto px-4 py-1.8 bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB] text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Running Pipeline...</span>
+            {errorMsg && (
+              <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-[200px]">{errorMsg}</span>
               </div>
             )}
 
             {pipelineStatus === 'completed' && (
               <button
-                onClick={resetNodeStatesToInitial}
-                className="w-full sm:w-auto px-4 py-1.8 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#52525B] text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => {
+                  setLatestStatementId(null);
+                  resetNodeStatesToInitial();
+                  setPipelineStatus('idle');
+                  setActiveLogMsg("Canvas reset. Ready for new audit.");
+                }}
+                className="w-full sm:w-auto px-4 py-1.8 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#52525B] text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer font-sans"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Reset Workflow Canvas</span>
@@ -410,16 +592,13 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           </div>
         </div>
 
-        {/* WORKFLOW VIEWPORT CONTROLLER (Scrollable on small, full scale on large formats) */}
+        {/* WORKFLOW VIEWPORT CONTROLLER */}
         <div className="bg-[#FAFDFB] border border-[#E4E4E7] rounded-xl overflow-x-auto shadow-sm relative" style={{ backgroundImage: 'radial-gradient(#e4e4e7 1.5px, transparent 1.5px)', backgroundSize: '18px 18px' }}>
           
-          {/* Main Visual Node Map Container */}
-          <div className="min-w-[1780px] w-[1780px] h-[450px] relative p-8 select-none">
+          <div className="min-w-[2000px] w-[2000px] h-[450px] relative p-8 select-none">
             
             {/* SVG Base Connection Layer */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
-              
-              {/* Dynamic Connection Path Generator */}
               {(() => {
                 const drawConnection = (fromKey: string, toKey: string, targetStatus: NodeStatus, outPortYOffset = 38, inPortYOffset = 38) => {
                   const from = nodeCoords[fromKey];
@@ -434,22 +613,19 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                   
                   return (
                     <g key={`${fromKey}-${toKey}`}>
-                      {/* Shadow background track */}
                       <path d={path} fill="none" stroke="#f4f4f5" strokeWidth="5" strokeLinecap="round" opacity="0.4" />
-                      {/* Main connection wire */}
                       <path 
                         d={path} 
                         fill="none" 
-                        stroke={targetStatus === 'complete' ? '#10b981' : '#e4e4e7'} 
+                        stroke={targetStatus === 'complete' ? '#10b981' : targetStatus === 'failed' ? '#ef4444' : '#e4e4e7'} 
                         strokeWidth={targetStatus === 'running' ? '2.5' : '1.8'} 
                         strokeLinecap="round" 
                       />
-                      {/* Process execution signal */}
                       {targetStatus === 'running' && (
                         <path 
                           d={path} 
                           fill="none" 
-                          stroke={fromKey === 'upload' || fromKey === 'ocr' || fromKey === 'cleaning' || fromKey === 'validation' ? '#3b82f6' : '#f59e0b'} 
+                          stroke={fromKey === 'upload' || fromKey === 'ocr' || fromKey === 'cleaning' || fromKey === 'standardization' || fromKey === 'validation' || fromKey === 'database' ? '#3b82f6' : '#f59e0b'} 
                           strokeWidth="2.5" 
                           strokeLinecap="round"
                           className="flow-line-fast"
@@ -461,26 +637,23 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
 
                 return (
                   <>
-                    {/* upload -> ocr */}
                     {drawConnection('upload', 'ocr', nodeStates.ocr)}
-                    {/* ocr -> cleaning */}
                     {drawConnection('ocr', 'cleaning', nodeStates.cleaning)}
-                    {/* cleaning -> validation */}
-                    {drawConnection('cleaning', 'validation', nodeStates.validation)}
-                    {/* validation -> router */}
-                    {drawConnection('validation', 'router', nodeStates.router)}
+                    {drawConnection('cleaning', 'standardization', nodeStates.standardization)}
+                    {drawConnection('standardization', 'validation', nodeStates.validation)}
+                    {drawConnection('validation', 'database', nodeStates.database)}
 
-                    {/* Router outputs: 3 distinct parallel ports -> 3 inputs */}
-                    {drawConnection('router', 'loops', nodeStates.loops, 20, 38)}
-                    {drawConnection('router', 'flow', nodeStates.flow, 38, 38)}
-                    {drawConnection('router', 'trails', nodeStates.trails, 56, 38)}
+                    {/* Database branches out in parallel */}
+                    {drawConnection('database', 'loops', nodeStates.loops, 20, 38)}
+                    {drawConnection('database', 'flow', nodeStates.flow, 38, 38)}
+                    {drawConnection('database', 'trails', nodeStates.trails, 56, 38)}
 
-                    {/* Parallel paths -> Report builder merges */}
+                    {/* Branches merge into Report */}
                     {drawConnection('loops', 'report', nodeStates.report === 'running' ? 'running' : (nodeStates.report === 'complete' ? 'complete' : 'queued'))}
                     {drawConnection('flow', 'report', nodeStates.report === 'running' ? 'running' : (nodeStates.report === 'complete' ? 'complete' : 'queued'))}
                     {drawConnection('trails', 'report', nodeStates.report === 'running' ? 'running' : (nodeStates.report === 'complete' ? 'complete' : 'queued'))}
 
-                    {/* Report builder -> final exports split */}
+                    {/* Report yields PDF & Excel */}
                     {drawConnection('report', 'exportPdf', nodeStates.exportPdf, 25, 38)}
                     {drawConnection('report', 'exportExcel', nodeStates.exportExcel, 51, 38)}
                   </>
@@ -488,11 +661,10 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
               })()}
             </svg>
 
-            {/* DOM Overlay of Interactive Node Cards positioned exactly according to coordinate grid */}
+            {/* DOM Overlay of Interactive Node Cards */}
             {Object.entries(nodeCoords).map(([key, coords]) => {
               const status = nodeStates[key];
               
-              // Map individual node details dynamically
               let title = '';
               let sub = '';
               let IconComponent = UploadCloud;
@@ -501,7 +673,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
               switch(key) {
                 case 'upload':
                   title = 'Evidence Ingestion';
-                  sub = '2 files loaded';
+                  sub = currentStatementId ? 'Document enqueued' : 'Ingest statement';
                   IconComponent = UploadCloud;
                   iconBg = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
                   break;
@@ -513,55 +685,61 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                   break;
                 case 'cleaning':
                   title = 'Data Cleaning';
-                  sub = status === 'queued' ? 'Deduplication' : (status === 'running' ? `Cleaning (${cleanedCount}/132)` : '132 duplicates purged');
+                  sub = status === 'queued' ? 'Deduplication' : (status === 'running' ? `Polishing data...` : 'Duplicates purged');
                   IconComponent = Eraser;
                   iconBg = 'bg-amber-50 text-amber-700 border border-amber-100';
                   break;
-                case 'validation':
-                  title = 'Data Validation';
-                  sub = status === 'queued' ? 'Schema compliance' : (status === 'running' ? `Checking (${validatedCount.toLocaleString()})` : 'Format verified');
+                case 'standardization':
+                  title = 'Standardization';
+                  sub = status === 'queued' ? 'Schema mapping' : (status === 'running' ? `Mapping keys...` : 'Structure normalized');
                   IconComponent = ShieldCheck;
                   iconBg = 'bg-sky-50 text-sky-700 border border-sky-100';
                   break;
-                case 'router':
-                  title = 'Detection Router';
-                  sub = status === 'queued' ? 'Branching' : (status === 'running' ? 'Routing analysis...' : 'Separated into 3 paths');
-                  IconComponent = GitFork;
+                case 'validation':
+                  title = 'Validation Engine';
+                  sub = status === 'queued' ? 'Integrity checks' : (status === 'running' ? `Scanning rows...` : 'Constraints verified');
+                  IconComponent = ShieldCheck;
                   iconBg = 'bg-rose-50 text-rose-700 border border-rose-100';
+                  break;
+                case 'database':
+                  title = 'Data Base Store';
+                  sub = status === 'queued' ? 'Saving transaction DB' : (status === 'running' ? `Writing DB store...` : 'Persisted to SQL');
+                  IconComponent = FileText;
+                  iconBg = 'bg-teal-50 text-teal-700 border border-teal-100';
                   break;
                 case 'loops':
                   title = 'Round Trip Seek';
-                  sub = status === 'queued' ? 'Trace loops' : (status === 'running' ? 'Circular scan...' : '2 loops detected');
+                  sub = status === 'queued' ? 'Trace loops' : (status === 'running' ? 'Circular scan...' : 'Loops parsed');
                   IconComponent = RefreshCw;
                   iconBg = 'bg-pink-50 text-pink-700 border border-pink-100';
                   break;
                 case 'flow':
                   title = 'Money Flow Map';
-                  sub = status === 'queued' ? 'Account graphs' : (status === 'running' ? 'Mapping nodes...' : '43 accounts mapped');
+                  sub = status === 'queued' ? 'Account graphs' : (status === 'running' ? 'Mapping nodes...' : 'Topology complete');
                   IconComponent = GitFork;
-                  iconBg = 'bg-teal-50 text-teal-700 border border-teal-100';
+                  iconBg = 'bg-violet-50 text-violet-700 border border-violet-100';
                   break;
                 case 'trails':
                   title = 'Money Trail Trace';
-                  sub = status === 'queued' ? 'FIFO sequences' : (status === 'running' ? 'Resolving trails...' : '8 validation trails');
+                  sub = status === 'queued' ? 'FIFO sequences' : (status === 'running' ? 'Resolving trails...' : 'FIFO trails computed');
                   IconComponent = Activity;
-                  iconBg = 'bg-violet-50 text-violet-700 border border-violet-100';
+                  iconBg = 'bg-blue-50 text-blue-700 border border-blue-100';
                   break;
                 case 'report':
                   title = 'Report Builder';
-                  sub = status === 'queued' ? 'Dossier compiling' : (status === 'running' ? 'Layering data...' : 'Dossier ready');
+                  sub = status === 'queued' ? 'Dossier compiling' : (status === 'running' ? 'Layering details...' : 'Summary constructed');
                   IconComponent = FileCheck;
-                  iconBg = 'bg-blue-50 text-blue-700 border border-blue-100';
+                  iconBg = 'bg-orange-50 text-orange-700 border border-orange-100';
                   break;
                 case 'exportPdf':
                   title = 'PDF Vector Brief';
-                  sub = status === 'complete' ? '✓ Compiled Document' : 'Queued';
+                  sub = status === 'complete' ? '✓ PDF Compiled' : 'Queued';
                   IconComponent = FileDown;
                   iconBg = 'bg-red-50 text-red-700 border border-red-100';
                   break;
                 case 'exportExcel':
                   title = 'Excel Data Ledger';
-                  sub = status === 'complete' ? '✓ Encrypted Sheet' : 'Queued';
+                  sub = status === 'complete' ? '✓ Spreadsheet Ready' : 'Queued';
                   IconComponent = FileSpreadsheet;
                   iconBg = 'bg-green-50 text-green-700 border border-green-100';
                   break;
@@ -569,28 +747,29 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
 
               const isRunning = status === 'running';
               const isComplete = status === 'complete';
+              const isFailed = status === 'failed';
 
               return (
                 <div 
                   key={key}
                   className={`absolute bg-white rounded-xl border p-3 flex flex-col justify-between w-[180px] h-[76px] transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.03)] group hover:scale-[1.03] hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(0,0,0,0.05)] ${
                     isRunning ? 'border-amber-500 node-running-glow ring-2 ring-amber-400/25 z-20' : 
+                    isFailed ? 'border-red-500 z-20 shadow-[0_0_12px_rgba(239,68,68,0.2)]' :
                     isComplete ? 'border-[#10B981] z-10' : 'border-zinc-200 z-10'
                   }`}
                   style={{ left: `${coords.x}px`, top: `${coords.y}px` }}
                 >
-                  {/* Left Connector handle (Input Port) */}
+                  {/* Left input port marker */}
                   {key !== 'upload' && (
                     <div className="w-2.5 h-2.5 rounded-full bg-white border border-zinc-400 absolute -left-1.25 top-1/2 -translate-y-1/2 flex items-center justify-center shadow-xs z-30">
                       <div className="w-1 h-1 rounded-full bg-zinc-600" />
                     </div>
                   )}
 
-                  {/* Right Connector handle (Output Port) */}
+                  {/* Right output port markers */}
                   {key !== 'exportPdf' && key !== 'exportExcel' && (
                     <>
-                      {/* Router has 3 distinct output port markers on right border */}
-                      {key === 'router' ? (
+                      {key === 'database' ? (
                         <>
                           <div className="w-2.5 h-2.5 rounded-full bg-white border border-zinc-400 absolute -right-1.25 top-[20px] flex items-center justify-center shadow-xs z-30">
                             <div className="w-1 h-1 rounded-full bg-zinc-600" />
@@ -619,7 +798,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                     </>
                   )}
 
-                  {/* Node Header Content */}
+                  {/* Header */}
                   <div className="flex items-start gap-2.5 min-w-0">
                     <div className={`p-1.5 rounded-lg shrink-0 ${iconBg}`}>
                       <IconComponent className="w-4 h-4" />
@@ -630,7 +809,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                     </div>
                   </div>
 
-                  {/* Bottom details / status state */}
+                  {/* Details block */}
                   <div className="flex items-center justify-between pt-1 border-t border-zinc-100/80 font-mono">
                     <span className="text-[8px] tracking-wider uppercase font-semibold text-zinc-400">
                       {key === 'upload' ? 'source' : 
@@ -643,13 +822,16 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                           <span>Active</span>
                         </div>
                       )}
+                      {isFailed && (
+                        <span className="text-red-500 text-[8px] font-bold">Error</span>
+                      )}
                       {isComplete && (
                         <div className="flex items-center gap-1 text-[#10B981] text-[8px] font-bold">
                           <CheckCircle2 className="w-2.5 h-2.5 stroke-[3]" />
                           <span>Done</span>
                         </div>
                       )}
-                      {!isRunning && !isComplete && (
+                      {!isRunning && !isComplete && !isFailed && (
                         <span className="text-zinc-400 text-[8px] font-medium">Idle</span>
                       )}
                     </div>
@@ -657,14 +839,13 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 </div>
               );
             })}
-
           </div>
         </div>
       </div>
 
       {/* SECTION 3: AFTER PROCESSING SUMMARY & ANALYSIS ACTIONS */}
-      {(pipelineStatus === 'completed' || pipelineStatus === 'processing') && (
-        <div className="space-y-8 animate-fade-in max-w-4xl mx-auto pt-4">
+      {(pipelineStatus === 'completed' || pipelineStatus === 'processing' || latestStatementId) && (
+        <div className="space-y-8 animate-fade-in max-w-5xl mx-auto pt-4">
           
           {/* Real-time Summary Box */}
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-6 space-y-4 shadow-sm">
@@ -678,37 +859,130 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 </p>
               </div>
               <span className="text-[10px] text-[#10B981] font-bold bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 rounded-full uppercase">
-                Success
+                {pipelineStatus === 'completed' ? 'Success' : 'Processing'}
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-6 gap-3.5 pt-1">
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
                 <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Extracted Tx</span>
-                <p className="text-base font-bold text-[#18181B]">12,042</p>
+                <p className="text-base font-bold text-[#18181B]">
+                  {validationReport?.summary.total ?? transactions.length ?? 0}
+                </p>
               </div>
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Identified Accs</span>
-                <p className="text-base font-bold text-[#18181B]">43</p>
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Entities / Accs</span>
+                <p className="text-base font-bold text-[#18181B]">{caseSummary?.entities || 0}</p>
               </div>
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
                 <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">De-Duplicated</span>
-                <p className="text-base font-bold text-[#18181B]">132</p>
+                <p className="text-base font-bold text-[#18181B]">{validationReport?.summary.duplicates || 0}</p>
               </div>
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
                 <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Failures Logged</span>
-                <p className="text-base font-bold text-[#18181B]">14</p>
+                <p className="text-base font-bold text-[#18181B]">
+                  {validationReport?.summary.failed_or_reversed || 0}
+                </p>
               </div>
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] text-orange-950 rounded-lg p-3 text-center space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Loops Found</span>
-                <p className="text-base font-bold text-[#C2410C]">2</p>
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Avg Confidence</span>
+                <p className="text-base font-bold text-[#C2410C]">
+                  {validationReport?.summary.average_confidence 
+                    ? `${(validationReport.summary.average_confidence * 100).toFixed(1)}%` 
+                    : 'N/A'}
+                </p>
               </div>
               <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Money Trails</span>
-                <p className="text-base font-bold text-[#18181B]">7</p>
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Credit Trails</span>
+                <p className="text-base font-bold text-[#18181B]">
+                  {transactions.filter(t => t.debit_credit === 'CREDIT').length}
+                </p>
               </div>
             </div>
           </div>
+
+          {/* NEW SECTION: DATA CLEANING AND VALIDATION REPORT */}
+          {validationReport && (
+            <div className="bg-white border border-[#E4E4E7] rounded-xl p-6 space-y-4 shadow-sm animate-fade-in">
+              <div>
+                <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider">
+                  Ledger Quality & Validation Findings
+                </h3>
+                <p className="text-[11px] text-[#71717A] font-light mt-0.5">
+                  Deduplication metrics and schema constraints violations flagged during canonical ingestion validation.
+                </p>
+              </div>
+
+              {validationReport.issues.length === 0 ? (
+                <div className="p-4 bg-[#F0FDF4] border border-[#A7F3D0] rounded-lg text-xs flex items-center gap-2 text-[#065F46]">
+                  <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
+                  <span>No data cleaning anomalies or validation issues detected for this statement! Ledger adheres perfectly to bank format.</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-[#E4E4E7] rounded-lg text-xs max-h-72 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#FAF9F6] border-b border-[#E4E4E7] text-[10px] uppercase font-bold text-[#71717A] font-mono sticky top-0">
+                        <th className="p-2.5 pl-4">Date</th>
+                        <th className="p-2.5">Narration</th>
+                        <th className="p-2.5 text-right">Amount</th>
+                        <th className="p-2.5 text-center">Type</th>
+                        <th className="p-2.5 text-center">Validation Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E4E4E7]">
+                      {validationReport.issues.map((issue) => {
+                        const notes = Array.isArray(issue.validation_notes)
+                          ? issue.validation_notes
+                          : typeof issue.validation_notes === 'string'
+                            ? [issue.validation_notes]
+                            : [];
+
+                        return (
+                          <tr key={issue.id} className="hover:bg-[#FAFAFA] align-top">
+                            <td className="p-2.5 pl-4 font-mono font-medium text-zinc-600 whitespace-nowrap">
+                              {issue.date || 'N/A'}
+                            </td>
+                            <td className="p-2.5 text-zinc-950 font-sans font-light max-w-sm truncate" title={issue.narration || ''}>
+                              {issue.narration || 'Unknown Narration'}
+                            </td>
+                            <td className="p-2.5 text-right font-mono font-bold text-zinc-950 whitespace-nowrap">
+                              {issue.amount !== null ? `₹${issue.amount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : '₹0.00'}
+                            </td>
+                            <td className="p-2.5 text-center whitespace-nowrap font-mono text-[10px]">
+                              <span className={`px-2 py-0.5 rounded ${
+                                issue.debit_credit === 'DEBIT' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                              }`}>
+                                {issue.debit_credit || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="p-2.5 pr-4">
+                              <div className="flex flex-wrap gap-1 items-center justify-center">
+                                {issue.is_duplicate && (
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold font-mono">DUPLICATE</span>
+                                )}
+                                {issue.is_failed && (
+                                  <span className="px-1.5 py-0.2 rounded bg-red-100 text-red-800 text-[9px] font-bold font-mono">FAILED_TX</span>
+                                )}
+                                {!issue.is_valid && (
+                                  <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 text-[9px] font-bold font-mono">INVALID</span>
+                                )}
+                                {notes.map((n, i) => (
+                                  <span key={i} className="px-1.5 py-0.2 rounded bg-gray-100 text-gray-700 text-[9px] font-light max-w-[150px] truncate" title={String(n)}>
+                                    {String(n)}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* LARGE INTERACTIVE ANALYSIS ACTION CARDS */}
           {pipelineStatus === 'completed' && (
@@ -722,7 +996,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 {/* 1. Round Trips Action */}
                 <button
                   onClick={() => onNavigateToView('round-trips')}
-                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44"
+                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44 animate-fade-in"
                 >
                   <div className="space-y-2">
                     <div className="w-8 h-8 rounded-lg bg-[#FFF2F2] border border-[#FCA5A5] flex items-center justify-center text-[#DC2626]">
@@ -744,7 +1018,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 {/* 2. Money Flow Action */}
                 <button
                   onClick={() => onNavigateToView('money-flow')}
-                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44"
+                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44 animate-fade-in"
                 >
                   <div className="space-y-2">
                     <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
@@ -766,7 +1040,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 {/* 3. Money Trails Action */}
                 <button
                   onClick={() => onNavigateToView('money-trails')}
-                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44"
+                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44 animate-fade-in"
                 >
                   <div className="space-y-2">
                     <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] border border-[#A7F3D0] flex items-center justify-center text-[#16A34A]">
@@ -788,7 +1062,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                 {/* 4. Generate Report Action */}
                 <button
                   onClick={() => onNavigateToView('reports')}
-                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44"
+                  className="bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-xl p-5 text-left transition-all duration-200 group cursor-pointer shadow-xs focus:outline-none flex flex-col justify-between h-44 animate-fade-in"
                 >
                   <div className="space-y-2">
                     <div className="w-8 h-8 rounded-lg bg-[#FAF9F6] border border-[#E4E4E7] flex items-center justify-center text-zinc-700">
@@ -796,7 +1070,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-[#18181B]">Generate Brief</h4>
-                      <p className="text-xs text-[#A1A1AA] mt-1 font-light leading-snug">
+                      <p className="text-xs text-[#71717A] mt-1 font-light leading-snug">
                         Export formatted PDF and Excel ledger portfolios.
                       </p>
                     </div>

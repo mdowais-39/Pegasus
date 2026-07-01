@@ -1,16 +1,91 @@
-import React, { useState } from 'react';
-import { Key, Shield, User, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Key, Shield, User, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { getApiBaseUrl } from '../services/api';
+import { getHealth, getServicesHealth } from '../services/finintelApi';
 
 export default function SettingsPage() {
   const [investigatorName, setInvestigatorName] = useState('Agent Willis');
   const [agencyCode, setAgencyCode] = useState('AML-US-UNIT4');
   const [modelType, setModelType] = useState('gemini-2.5-flash');
+  
+  // API base URL configuration
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+
+  // Connection testing state
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    status: 'success' | 'warning' | 'error' | null;
+    message: string;
+  }>({ status: null, message: '' });
+
+  // Initialize values
+  useEffect(() => {
+    setApiBaseUrl(getApiBaseUrl());
+    
+    const savedName = localStorage.getItem('finintel_investigator_name');
+    if (savedName) setInvestigatorName(savedName);
+
+    const savedCode = localStorage.getItem('finintel_agency_code');
+    if (savedCode) setAgencyCode(savedCode);
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.setItem('finintel_api_base_url', apiBaseUrl.trim());
+    localStorage.setItem('finintel_investigator_name', investigatorName);
+    localStorage.setItem('finintel_agency_code', agencyCode);
+    
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult({ status: null, message: '' });
+    
+    // Save temporary URL override for test fetch call
+    localStorage.setItem('finintel_api_base_url', apiBaseUrl.trim());
+
+    try {
+      // Test gateway main health endpoint
+      const health = await getHealth();
+      
+      try {
+        // Test upstream microservices
+        const servicesHealth = await getServicesHealth();
+        // Check if any services are down
+        const services = servicesHealth?.services || servicesHealth || {};
+        const downServices = Object.entries(services)
+          .filter(([_, status]) => status !== 'healthy' && status !== 'ok' && status !== true)
+          .map(([name]) => name);
+
+        if (downServices.length > 0) {
+          setTestResult({
+            status: 'warning',
+            message: `Connected. Warning: upstream services [${downServices.join(', ')}] appear offline.`
+          });
+        } else {
+          setTestResult({
+            status: 'success',
+            message: "Success! Gateway and all upstream microservices are online."
+          });
+        }
+      } catch (upstreamErr) {
+        setTestResult({
+          status: 'warning',
+          message: "Connected to Gateway, but upstream microservices health check failed."
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setTestResult({
+        status: 'error',
+        message: "Connection failed. Check API Base URL and confirm backend is running."
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   return (
@@ -47,7 +122,7 @@ export default function SettingsPage() {
                   type="text"
                   value={investigatorName}
                   onChange={(e) => setInvestigatorName(e.target.value)}
-                  className="w-full bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md px-3 py-1.5 text-[#18181B] focus:outline-none focus:ring-1 focus:ring-[#18181B] font-semibold"
+                  className="w-full bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md px-3 py-1.5 text-[#18181B] focus:outline-none focus:ring-1 focus:ring-[#18181B] font-semibold font-sans"
                 />
               </div>
 
@@ -59,35 +134,61 @@ export default function SettingsPage() {
                   type="text"
                   value={agencyCode}
                   onChange={(e) => setAgencyCode(e.target.value)}
-                  className="w-full bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md px-3 py-1.5 text-[#18181B] focus:outline-none focus:ring-1 focus:ring-[#18181B] font-semibold"
+                  className="w-full bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md px-3 py-1.5 text-[#18181B] focus:outline-none focus:ring-1 focus:ring-[#18181B] font-semibold font-sans"
                 />
               </div>
             </div>
 
-            {/* Token keys */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-[#52525B] uppercase flex justify-between font-mono">
-                <span>Secure API Proxy token</span>
-                <span className="text-[9px] text-[#047857] font-bold bg-[#ECFDF5] border border-[#A7F3D0] px-1.5 py-0.2 rounded leading-none">
-                  PROXY VERIFIED
-                </span>
+            {/* API Base URL Configuration */}
+            <div className="space-y-1.5 border-t border-[#E4E4E7] pt-4">
+              <label className="text-[10px] font-bold text-[#52525B] uppercase block font-mono">
+                API Base URL Address
               </label>
-              
-              <div className="relative">
+              <div className="flex gap-2">
                 <input
-                  type="password"
-                  disabled
-                  value="••••••••••••••••••••••••••••••••••••••••"
-                  className="w-full bg-[#FAF9F6] border border-[#E4E4E7] rounded-md px-3 py-1.5 text-[#A1A1AA] focus:outline-none cursor-not-allowed font-sans font-extrabold"
+                  type="text"
+                  value={apiBaseUrl}
+                  onChange={(e) => setApiBaseUrl(e.target.value)}
+                  placeholder="http://localhost:8080"
+                  className="flex-1 bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md px-3 py-1.5 text-[#18181B] focus:outline-none focus:ring-1 focus:ring-[#18181B] font-semibold font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTesting || !apiBaseUrl}
+                  className="px-3 py-1.5 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#52525B] rounded-md text-[11px] font-semibold flex items-center gap-1 shrink-0 disabled:opacity-50 cursor-pointer"
+                >
+                  {isTesting ? (
+                    <>
+                      <RefreshCw className="w-3 animate-spin" />
+                      <span>Testing...</span>
+                    </>
+                  ) : (
+                    <span>Test Connection</span>
+                  )}
+                </button>
               </div>
-              <p className="text-[10.5px] text-[#71717A] font-light">
-                Secure tokens are handled proxy-side to prevent client-side leaks in shared frames.
+              <p className="text-[10px] text-[#71717A] font-light">
+                Base gateway address for API requests (e.g. <code>http://localhost:8080</code>).
               </p>
+
+              {/* Connection Test Results badge/alert */}
+              {testResult.status && (
+                <div className={`p-2.5 rounded-lg border text-[11px] font-semibold flex items-start gap-2 mt-2 animate-fade-in ${
+                  testResult.status === 'success' ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]' :
+                  testResult.status === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                  'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  {testResult.status === 'success' && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />}
+                  {testResult.status === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
+                  {testResult.status === 'error' && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                  <span>{testResult.message}</span>
+                </div>
+              )}
             </div>
 
-            {/* Models */}
-            <div className="space-y-1.5">
+            {/* Models selection */}
+            <div className="space-y-1.5 border-t border-[#E4E4E7] pt-4">
               <label className="text-[10px] font-bold text-[#52525B] uppercase block font-mono">
                 Default Extraction Model
               </label>
