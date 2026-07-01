@@ -1,3 +1,4 @@
+mod api;
 mod config;
 mod routes;
 mod handlers;
@@ -6,48 +7,157 @@ mod models;
 mod repositories;
 mod state;
 
-use state::AppState;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 use axum::Router;
-use routes::health_routes::health_routes;
+use dotenvy::dotenv;
+use sqlx::postgres::PgPoolOptions;
+use tokio::{
+    sync::{
+        mpsc,
+        RwLock,
+    },
+};
 
-use sqlx::PgPool;
-use std::env;
+use tower_http::cors::CorsLayer;
+
+use routes::{
+    api_routes::api_routes,
+    health_routes::health_routes,
+};
+
+use config::service_config::ServiceConfig;
+use services::worker::start_worker;
+
+use state::{
+    app_state::AppState,
+    job_status::JobStatusStore,
+};
 
 #[tokio::main]
 async fn main() {
-
-    // Load .env file
-    dotenvy::dotenv().ok();
+    // Load .env
+    dotenv().ok();
 
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    // Read DATABASE_URL from environment
+    // Database URL
     let database_url =
-        env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
+        std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/finintel".into());
 
-    // Create PostgreSQL connection pool
-    let db =
-        PgPool::connect(&database_url)
-            .await
-            .expect("Failed to connect to PostgreSQL");
+    println!(
+        "\nDATABASE_URL = {}\n",
+        database_url
+    );
 
-    println!("✅ PostgreSQL connected");
+    // Create PostgreSQL pool
+    let db = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to PostgreSQL");
 
-    // Shared HTTP client
-    let http_client = reqwest::Client::new();
+    println!("PostgreSQL Connected");
 
-    // Shared application state
+    // Current database
+    let db_name: (String,) =
+        sqlx::query_as(
+            "SELECT current_database()"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "CONNECTED DATABASE = {}",
+        db_name.0
+    );
+
+    // Current schema
+    let schema_name: (String,) =
+        sqlx::query_as(
+            "SELECT current_schema()"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "CURRENT SCHEMA = {}",
+        schema_name.0
+    );
+
+    // Existing statement count
+    let statement_count: (i64,) =
+        sqlx::query_as(
+            "SELECT COUNT(*) FROM statements"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "STATEMENTS IN DB = {}",
+        statement_count.0
+    );
+
+    // Existing transaction count
+    let transaction_count: (i64,) =
+        sqlx::query_as(
+            "SELECT COUNT(*) FROM transactions"
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+
+    println!(
+        "TRANSACTIONS IN DB = {}",
+        transaction_count.0
+    );
+
+    // Create queue
+    let (job_sender, job_receiver) =
+        mpsc::channel(100);
+
+    // Create in-memory job status store
+    let job_status: JobStatusStore =
+        Arc::new(
+            RwLock::new(HashMap::new())
+        );
+
+    // Start background worker
+    tokio::spawn(
+        start_worker(
+            job_receiver,
+            db.clone(),
+        )
+    );
+
+    println!("Background Worker Started");
+
+    // Create application state
     let app_state = AppState {
         db,
-        http_client,
+        http_client: reqwest::Client::new(),
+        job_sender,
+        job_status,
+        services: ServiceConfig::from_env(),
     };
 
-    // Build router
+    // CORS so the frontend (different origin/port) can call the backend.
+    // Permissive in dev; tighten with allow_origin(...) for production.
+    let cors = CorsLayer::permissive();
+
+    // Build router (root health routes + versioned /api/v1 surface + /docs)
     let app = Router::new()
         .merge(health_routes())
+        .merge(api_routes())
+        .layer(cors)
         .with_state(app_state);
 
     // Start server
@@ -56,11 +166,13 @@ async fn main() {
             "0.0.0.0:8080"
         )
         .await
-        .unwrap();
+        .expect("Failed to bind to port 8080");
 
-    println!("🚀 FinIntel Backend running on :8080");
+    println!(
+        "FinIntel Backend running on http://localhost:8080"
+    );
 
     axum::serve(listener, app)
         .await
-        .unwrap();
+        .expect("Server failed");
 }

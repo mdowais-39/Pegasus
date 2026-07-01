@@ -22,8 +22,9 @@ sqlx = { version = "0.8", features = [
 ] }
 
 dotenvy = "0.15"
-
+anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
+mime = "0.3"
