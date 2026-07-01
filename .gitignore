@@ -261,3 +261,10 @@ build/
 *.seed
 *.pid
 *.pid.lock
+
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+target/
