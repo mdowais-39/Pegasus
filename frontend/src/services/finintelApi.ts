@@ -98,3 +98,11 @@ export async function clearDatabase(): Promise<any> {
     method: "POST",
   });
 }
+
+export async function getTopSuspicious(caseId: string, limit = 20): Promise<any> {
+  return apiRequest<any>(`/api/v1/investigations/${caseId}/top-suspicious?limit=${limit}`);
+}
+
+export async function getTopRisks(caseId: string, limit = 20): Promise<any> {
+  return apiRequest<any>(`/api/v1/investigations/${caseId}/top-risks?limit=${limit}`);
+}
