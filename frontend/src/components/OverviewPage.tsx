@@ -529,105 +529,108 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
         </p>
       </div>
 
-      {/* SECTION 1: CENTERED EVIDENCE UPLOAD AREA */}
-      <div className="space-y-4 max-w-3xl mx-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-[#52525B] uppercase tracking-wider">
-            Evidence Intake Portal
-          </h2>
-          <span className="text-[10px] text-[#A1A1AA] font-medium bg-[#F4F4F5] border border-[#E4E4E7] px-2 py-0.5 rounded-md">
-            PDF, CSV, XLSX, DOCX, Images
-          </span>
-        </div>
-
-        <div
-          onDragEnter={handleDrag}
-          onDragOver={handleDrag}
-          onDragLeave={handleDrag}
-          onDrop={handleDrop}
-          onClick={(e) => triggerSearchFile(e)}
-          className={`border border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
-            dragActive 
-              ? 'border-[#2563EB] bg-[#EFF6FF] ring-2 ring-[#EFF6FF]' 
-              : 'border-[#E4E4E7] bg-white hover:border-[#18181B] shadow-[0_2px_8px_rgba(0,0,0,0.015)]'
-          }`}
-        >
-          <div className="w-12 h-12 rounded-full bg-[#FAF9F6] flex items-center justify-center text-[#71717A] mb-4 border border-[#F4F4F5]">
-            <UploadCloud className="w-6 h-6 text-[#18181B]" />
+      {/* SECTION 1: CENTERED EVIDENCE UPLOAD AREA & PORTFOLIO */}
+      <div className="space-y-6 max-w-3xl mx-auto">
+        
+        {/* Evidence Intake Portal */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold text-[#52525B] uppercase tracking-wider">
+              Evidence Intake Portal
+            </h2>
+            <span className="text-[10px] text-[#A1A1AA] font-medium bg-[#F4F4F5] border border-[#E4E4E7] px-2 py-0.5 rounded-md font-sans">
+              PDF, CSV, XLSX, DOCX, Images
+            </span>
           </div>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-[#18181B]">
-              Drag & drop ledger sheets/folders, or{' '}
-              <span onClick={(e) => triggerSearchFile(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse files</span>
-              {' '}or{' '}
-              <span onClick={(e) => triggerSearchFolder(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse folder</span>
-            </p>
-            <p className="text-[11px] text-[#71717A] font-light">
-              Maximum dataset ingestion capability: 100MB per bundle
-            </p>
-          </div>
-        </div>
 
-        {/* Selected Pending Files with red X button */}
-        {pendingFiles.length > 0 && (
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold text-[#52525B] uppercase tracking-wider">
-                Pending Files Queue ({pendingFiles.length})
-              </h3>
+          <div
+            onDragEnter={handleDrag}
+            onDragOver={handleDrag}
+            onDragLeave={handleDrag}
+            onDrop={handleDrop}
+            onClick={(e) => triggerSearchFile(e)}
+            className={`border border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
+              dragActive 
+                ? 'border-[#2563EB] bg-[#EFF6FF] ring-2 ring-[#EFF6FF]' 
+                : 'border-[#E4E4E7] bg-white hover:border-[#18181B] shadow-[0_2px_8px_rgba(0,0,0,0.015)]'
+            }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-[#FAF9F6] flex items-center justify-center text-[#71717A] mb-4 border border-[#F4F4F5]">
+              <UploadCloud className="w-6 h-6 text-[#18181B]" />
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {pendingFiles.map((file, idx) => (
-                <div 
-                  key={idx} 
-                  className="bg-white border border-[#E4E4E7] p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all relative shadow-[0_2px_6px_rgba(0,0,0,0.01)]"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
-                      <FileText className="w-4 h-4" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[#18181B]">
+                Drag & drop files or folders, or{' '}
+                <span onClick={(e) => triggerSearchFile(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse files</span>
+                {' '}or{' '}
+                <span onClick={(e) => triggerSearchFolder(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse folder</span>
+              </p>
+              <p className="text-[11px] text-[#71717A] font-light">
+                Maximum dataset ingestion limit: 100MB per bundle
+              </p>
+            </div>
+          </div>
+
+          {/* Selected Pending Files with red X button */}
+          {pendingFiles.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-bold text-[#52525B] uppercase tracking-wider">
+                  Pending Files Queue ({pendingFiles.length})
+                </h3>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+                {pendingFiles.map((file, idx) => (
+                  <div 
+                    key={idx} 
+                    className="bg-white border border-[#E4E4E7] p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all relative shadow-[0_2px_6px_rgba(0,0,0,0.01)] text-xs animate-fade-in"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-bold text-[#18181B] truncate pr-4">{file.name}</h3>
+                        <p className="text-[10px] text-[#71717A] mt-0.5 font-light">
+                          {formatBytes(file.size)} • Ready
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-bold text-[#18181B] truncate pr-4">{file.name}</h3>
-                      <p className="text-[10px] text-[#71717A] mt-0.5 font-light">
-                        {formatBytes(file.size)} • Ready to process
-                      </p>
-                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+                      }}
+                      className="absolute -top-1.5 -right-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
+                      title="Remove file"
+                    >
+                      ×
+                    </button>
                   </div>
-                  
-                  {/* Delete button (small red x in top right corner) */}
+                ))}
+              </div>
+
+              {/* Manual Start Pipeline Trigger Button */}
+              {pipelineStatus === 'idle' && (
+                <div className="flex justify-center pt-2">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingFiles(prev => prev.filter((_, i) => i !== idx));
-                    }}
-                    className="absolute -top-1.5 -right-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
-                    title="Remove file"
+                    onClick={executePipelineForPendingFiles}
+                    className="px-6 py-2.5 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md hover:shadow-lg focus:outline-none"
                   >
-                    ×
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Start Forensic Analysis Pipeline</span>
                   </button>
                 </div>
-              ))}
+              )}
             </div>
+          )}
+        </div>
 
-            {/* Manual Start Pipeline Trigger Button */}
-            {pipelineStatus === 'idle' && (
-              <div className="flex justify-center pt-2">
-                <button
-                  type="button"
-                  onClick={executePipelineForPendingFiles}
-                  className="px-6 py-2.5 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md hover:shadow-lg focus:outline-none"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Start Forensic Analysis Pipeline</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Ingested Statements Portfolio with statement ID and delete red X button */}
+        {/* Ingested Statements Portfolio */}
         {statements.length > 0 && (
           <div className="space-y-3 pt-6 border-t border-[#E4E4E7] animate-fade-in">
             <div className="flex items-center justify-between">
@@ -639,81 +642,84 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {statements.map(file => (
-                <div 
-                  key={file.id} 
-                  onClick={() => {
-                    setLatestStatementId(file.id);
-                    setCaseId(file.id);
-                  }}
-                  className={`bg-white border p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all cursor-pointer relative shadow-[0_2px_6px_rgba(0,0,0,0.015)] ${
-                    latestStatementId === file.id ? 'border-[#18181B] ring-1 ring-zinc-950' : 'border-[#E4E4E7]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 pr-4">
-                      <h3 className="text-xs font-bold text-[#18181B] truncate">{file.filename}</h3>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <p className="text-[9px] text-[#71717A] font-mono select-all bg-zinc-50 px-1 py-0.5 rounded border border-zinc-200/50 truncate max-w-[150px]" title={file.id}>
-                          Statement ID: {file.id}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(file.id);
-                            setCopiedId(file.id);
-                            setTimeout(() => setCopiedId(null), 2000);
-                          }}
-                          className={`text-[9px] font-semibold cursor-pointer hover:underline ${
-                            copiedId === file.id ? 'text-green-600 hover:text-green-700' : 'text-[#2563EB] hover:text-blue-700'
-                          }`}
-                        >
-                          {copiedId === file.id ? 'Copied!' : 'Copy'}
-                        </button>
+            {/* Scrollable Container with border to look unified and clean */}
+            <div className="max-h-[19.5rem] overflow-y-auto pr-1 border border-[#E4E4E7] bg-[#FAF9F6]/30 p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {statements.map(file => (
+                  <div 
+                    key={file.id} 
+                    onClick={() => {
+                      setLatestStatementId(file.id);
+                      setCaseId(file.id);
+                    }}
+                    className={`bg-white border p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all cursor-pointer relative shadow-[0_2px_6px_rgba(0,0,0,0.015)] ${
+                      latestStatementId === file.id ? 'border-[#18181B] ring-1 ring-zinc-950' : 'border-[#E4E4E7]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
+                        <FileText className="w-4 h-4" />
                       </div>
-                      <p className="text-[9.5px] text-[#71717A] mt-0.5 font-light">
-                        Bank: {file.bank_name || 'Generic'}
-                      </p>
+                      <div className="min-w-0 pr-4">
+                        <h3 className="text-xs font-bold text-[#18181B] truncate">{file.filename}</h3>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <p className="text-[9px] text-[#71717A] font-mono select-all bg-zinc-50 px-1 py-0.5 rounded border border-zinc-200/50 truncate max-w-[100px]" title={file.id}>
+                            Statement ID: {file.id}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(file.id);
+                              setCopiedId(file.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className={`text-[9px] font-semibold cursor-pointer hover:underline ${
+                              copiedId === file.id ? 'text-green-600 hover:text-green-700' : 'text-[#2563EB] hover:text-blue-700'
+                            }`}
+                          >
+                            {copiedId === file.id ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                        <p className="text-[9.5px] text-[#71717A] mt-0.5 font-light">
+                          Bank: {file.bank_name || 'Generic'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      file.status === 'completed' ? 'text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0]' :
-                      file.status === 'failed' ? 'text-red-800 bg-red-50 border border-red-200' : 'text-blue-800 bg-blue-50 border border-blue-200'
-                    }`}>
-                      <span className={`w-1 h-1 rounded-full inline-block ${
-                        file.status === 'completed' ? 'bg-[#10B981]' : file.status === 'failed' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'
-                      }`}></span>
-                      {file.status}
-                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className={`flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                        file.status === 'completed' ? 'text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0]' :
+                        file.status === 'failed' ? 'text-red-800 bg-red-50 border border-red-200' : 'text-blue-800 bg-blue-50 border border-blue-200'
+                      }`}>
+                        <span className={`w-1 h-1 rounded-full inline-block ${
+                          file.status === 'completed' ? 'bg-[#10B981]' : file.status === 'failed' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'
+                        }`}></span>
+                        {file.status}
+                      </div>
 
-                    {/* Delete button (small red x in right corner of uploaded statements) */}
-                    <button
-                      type="button"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (window.confirm(`Delete statement "${file.filename}" and its associated transactions from DB?`)) {
-                          try {
-                            await deleteUploadedStatement(file.id);
-                          } catch (err: any) {
-                            alert(`Failed to delete: ${err.message}`);
+                      {/* Delete button (small red x in right corner of uploaded statements) */}
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete statement "${file.filename}" and its associated transactions from DB?`)) {
+                            try {
+                              await deleteUploadedStatement(file.id);
+                            } catch (err: any) {
+                              alert(`Failed to delete: ${err.message}`);
+                            }
                           }
-                        }
-                      }}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
-                      title="Delete Statement"
-                    >
-                      ×
-                    </button>
+                        }}
+                        className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
+                        title="Delete Statement"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -721,7 +727,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
         {/* Clear Database Session Button positioned at bottom-right */}
         <div className="flex justify-end pt-1">
           <button
-            type="button"
+            type="button; e.stopPropagation()"
             onClick={async () => {
               if (window.confirm("Are you sure you want to clear the entire PostgreSQL database? This will purge all statements and analysis results.")) {
                 setActiveLogMsg("Clearing database...");
