@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Statement, CaseSummary } from "../types/api";
-import { getStatements, getCaseSummary } from "../services/finintelApi";
+import { getStatements, getCaseSummary, deleteStatement, clearDatabase } from "../services/finintelApi";
 
 interface FinintelDataContextProps {
   caseId: string;
@@ -13,6 +13,8 @@ interface FinintelDataContextProps {
   refreshSummary: (id?: string) => Promise<void>;
   isLoadingSummary: boolean;
   summaryError: string | null;
+  deleteUploadedStatement: (id: string) => Promise<void>;
+  clearDatabaseSession: () => Promise<void>;
 }
 
 const FinintelDataContext = createContext<FinintelDataContextProps | undefined>(undefined);
@@ -32,8 +34,9 @@ export const FinintelDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Determine if there is a completed statement we can treat as the latestStatementId
       const completed = data.filter((s) => s.status === "completed");
       if (completed.length > 0) {
-        // Use the newest one as the latest completed
         setLatestStatementId(completed[0].id);
+      } else {
+        setLatestStatementId(null);
       }
     } catch (err: any) {
       console.error("Failed to load statements list:", err);
@@ -60,10 +63,50 @@ export const FinintelDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     refreshSummary(id);
   }, [refreshSummary]);
 
-  // Load initial statements list
+  const deleteUploadedStatement = useCallback(async (id: string) => {
+    try {
+      await deleteStatement(id);
+      await refreshStatements();
+      if (caseId === id) {
+        setCaseIdState("all");
+      } else {
+        await refreshSummary();
+      }
+    } catch (err) {
+      console.error("Failed to delete statement:", err);
+      throw err;
+    }
+  }, [caseId, refreshStatements, refreshSummary]);
+
+  const clearDatabaseSession = useCallback(async () => {
+    try {
+      await clearDatabase();
+      setLatestStatementId(null);
+      setCaseIdState("all");
+      setStatements([]);
+      setCaseSummary(null);
+      await refreshStatements();
+      await refreshSummary("all");
+    } catch (err) {
+      console.error("Failed to clear database session:", err);
+      throw err;
+    }
+  }, [refreshStatements, refreshSummary]);
+
+  // Initialize database session on app mount/page reload
   useEffect(() => {
-    refreshStatements();
-  }, [refreshStatements]);
+    const startFreshSession = async () => {
+      try {
+        console.log("Session started: loading existing database records...");
+      } catch (err) {
+        console.error("Initialize database session failed:", err);
+      } finally {
+        await refreshStatements();
+        await refreshSummary("all");
+      }
+    };
+    startFreshSession();
+  }, []);
 
   // Load summary whenever caseId changes
   useEffect(() => {
@@ -83,6 +126,8 @@ export const FinintelDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         refreshSummary,
         isLoadingSummary,
         summaryError,
+        deleteUploadedStatement,
+        clearDatabaseSession,
       }}
     >
       {children}
