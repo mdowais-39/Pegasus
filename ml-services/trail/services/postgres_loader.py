@@ -24,7 +24,11 @@ SELECT
     t.amount,
     t.narration,
     t.balance,
-    t.statement_id::text AS statement_id
+    t.statement_id::text AS statement_id,
+    t.receiver_account,
+    t.upi_id,
+    t.reference_number,
+    t.txn_type
 FROM transactions t
 WHERE t.is_valid = true
   AND (t.is_duplicate = false OR t.is_duplicate IS NULL)
