@@ -45,10 +45,15 @@ pub async fn upload_statement(
                     .ok();
             }
             Some("file") => {
-                filename = field
+                let raw_filename = field
                     .file_name()
                     .unwrap_or("statement")
                     .to_string();
+
+                filename = std::path::Path::new(&raw_filename)
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or(raw_filename);
 
                 let ext = std::path::Path::new(&filename)
                     .extension()
@@ -156,4 +161,55 @@ pub async fn get_validation_report(
 ) -> ApiResult<Value> {
     let report = read_repository::validation_report(&state.db, &id).await?;
     Ok(ApiResponse::success(report))
+}
+
+/// DELETE /api/v1/statements/{id}
+pub async fn delete_statement(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Value> {
+    let statement_uuid = Uuid::parse_str(&id)
+        .map_err(|e| AppError::Validation(format!("invalid statement uuid: {}", e)))?;
+        
+    let mut tx = state.db.begin().await
+        .map_err(|e| AppError::Internal(format!("failed to start transaction: {}", e)))?;
+        
+    sqlx::query("DELETE FROM jobs WHERE statement_id = $1")
+        .bind(statement_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("failed to delete jobs: {}", e)))?;
+        
+    sqlx::query("DELETE FROM transactions WHERE statement_id = $1")
+        .bind(statement_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("failed to delete transactions: {}", e)))?;
+        
+    sqlx::query("DELETE FROM statements WHERE id = $1")
+        .bind(statement_uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("failed to delete statement: {}", e)))?;
+        
+    tx.commit().await
+        .map_err(|e| AppError::Internal(format!("failed to commit transaction: {}", e)))?;
+        
+    Ok(ApiResponse::success(json!({ "deleted": id })))
+}
+
+/// POST /api/v1/database/clear
+pub async fn clear_database(State(state): State<AppState>) -> ApiResult<Value> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| AppError::Internal(format!("failed to start transaction: {}", e)))?;
+        
+    sqlx::query("TRUNCATE TABLE jobs, risk_profiles, entities, transactions, statements CASCADE;")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("failed to truncate tables: {}", e)))?;
+        
+    tx.commit().await
+        .map_err(|e| AppError::Internal(format!("failed to commit transaction: {}", e)))?;
+        
+    Ok(ApiResponse::success(json!({ "status": "cleared" })))
 }
