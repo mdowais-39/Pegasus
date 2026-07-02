@@ -32,7 +32,12 @@ export default function SettingsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('finintel_api_base_url', apiBaseUrl.trim());
+    let sanitizedUrl = apiBaseUrl.trim();
+    if (sanitizedUrl.toLowerCase().includes("localhot")) {
+      sanitizedUrl = sanitizedUrl.replace(/localhot/i, "localhost");
+      setApiBaseUrl(sanitizedUrl);
+    }
+    localStorage.setItem('finintel_api_base_url', sanitizedUrl);
     localStorage.setItem('finintel_investigator_name', investigatorName);
     localStorage.setItem('finintel_agency_code', agencyCode);
     
@@ -44,8 +49,14 @@ export default function SettingsPage() {
     setIsTesting(true);
     setTestResult({ status: null, message: '' });
     
+    let sanitizedUrl = apiBaseUrl.trim();
+    if (sanitizedUrl.toLowerCase().includes("localhot")) {
+      sanitizedUrl = sanitizedUrl.replace(/localhot/i, "localhost");
+      setApiBaseUrl(sanitizedUrl);
+    }
+    
     // Save temporary URL override for test fetch call
-    localStorage.setItem('finintel_api_base_url', apiBaseUrl.trim());
+    localStorage.setItem('finintel_api_base_url', sanitizedUrl);
 
     try {
       // Test gateway main health endpoint
