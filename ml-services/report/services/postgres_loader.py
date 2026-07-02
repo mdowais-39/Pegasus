@@ -16,17 +16,25 @@ def _conn():
 
 
 def _one(query, params=None):
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query, params or [])
-            return dict(cur.fetchone())
+    conn = _conn()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or [])
+                return dict(cur.fetchone())
+    finally:
+        conn.close()
 
 
 def _all(query, params=None):
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query, params or [])
-            return [dict(r) for r in cur.fetchall()]
+    conn = _conn()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or [])
+                return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
 
 
 class PostgresLoader:
