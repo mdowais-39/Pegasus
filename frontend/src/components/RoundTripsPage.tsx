@@ -4,6 +4,23 @@ import { useFinintelData } from '../context/FinintelDataContext';
 import { getRoundTrips, getRoundTripExplanation } from '../services/finintelApi';
 import { RoundTrip } from '../types/api';
 
+const getAdjustedPoints = (p1: { x: number; y: number }, p2: { x: number; y: number }, offset = 35) => {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len === 0) return { start: p1, end: p2 };
+  return {
+    start: {
+      x: p1.x + (dx * offset) / len,
+      y: p1.y + (dy * offset) / len,
+    },
+    end: {
+      x: p2.x - (dx * offset) / len,
+      y: p2.y - (dy * offset) / len,
+    }
+  };
+};
+
 export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?: (view: string) => void }) {
   const { caseId, setCaseId, latestStatementId } = useFinintelData();
 
@@ -12,9 +29,10 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Explanation states
-  const [explanation, setExplanation] = useState<string | null>(null);
+  // Explanation states (narrative + why indicators)
+  const [explanation, setExplanation] = useState<{ narrative: string; why: string[] } | null>(null);
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchTrips = useCallback(async () => {
     setIsLoading(true);
@@ -43,16 +61,32 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
     setExplanation(null);
     try {
       const response = await getRoundTripExplanation(caseId, chainId);
-      setExplanation(response.explanation || response.why_flagged || response.details || null);
+      if (response && (response.narrative || response.why)) {
+        setExplanation({
+          narrative: response.narrative || '',
+          why: response.why || [],
+        });
+      } else {
+        const fallbackText = (response as any).explanation || (response as any).why_flagged || (response as any).details || '';
+        setExplanation({
+          narrative: fallbackText,
+          why: []
+        });
+      }
     } catch (err) {
       console.error("Failed to fetch explanation for round-trip:", err);
       // Fallback description based on nodes and amounts
       const nodes = trip.accounts || trip.nodes || [];
-      setExplanation(
-        `Circular chain detected with ${nodes.length} hops. Total value of ${
-          formatCurrency(trip.total_amount ?? trip.totalAmount ?? 0)
-        } circulated back to origin in ${trip.duration || 'unknown duration'}.`
-      );
+      const fallbackNarrative = `Circular chain detected with ${nodes.length} hops. Total value of ${
+        formatCurrency(trip.total_amount ?? trip.totalAmount ?? 0)
+      } circulated back to origin in ${trip.duration || 'unknown duration'}.`;
+      setExplanation({
+        narrative: fallbackNarrative,
+        why: [
+          "Circular loop detected in transaction logs.",
+          "High transaction velocity between accounts forming a cycle."
+        ]
+      });
     } finally {
       setIsLoadingExplanation(false);
     }
@@ -79,7 +113,7 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
   const currentFlow = currentTrip ? (currentTrip.accounts || currentTrip.nodes || []) : [];
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-10 animate-fade-in select-none">
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-8 animate-fade-in select-none">
       
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E4E4E7] pb-6">
@@ -141,15 +175,15 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
         </div>
       ) : (
         /* Primary Grid Workspace */
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
           
           {/* Left Side: Loop Selectors */}
-          <div className="md:col-span-5 space-y-3">
+          <div className="md:col-span-4 space-y-3">
             <span className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider block font-mono">
               Cycle Directory
             </span>
 
-            <div className="space-y-2.5 max-h-[30rem] overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-[38rem] overflow-y-auto pr-1">
               {roundTrips.map((trip, idx) => {
                 const isSelected = activeTab === idx;
                 const tripId = trip.id !== undefined ? `Round Trip #${trip.id}` : `Round Trip #${idx + 1}`;
@@ -195,10 +229,22 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
           </div>
 
           {/* Right Side: Visual Graph & Details */}
-          <div className="md:col-span-7 space-y-6">
+          <div className="md:col-span-8 space-y-6">
             
             {/* Graph Visualization Card */}
             <div className="bg-white border border-[#E4E4E7] rounded-xl p-6 space-y-4">
+              {/* Dynamic flow styling */}
+              <style>{`
+                @keyframes flowingPath {
+                  from { stroke-dashoffset: 24; }
+                  to { stroke-dashoffset: 0; }
+                }
+                .flow-line {
+                  stroke-dasharray: 6, 8;
+                  animation: flowingPath 1.2s linear infinite;
+                }
+              `}</style>
+              
               <span className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider block font-mono">
                 Loop Graph Visualization
               </span>
@@ -206,6 +252,24 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
               {/* Responsive SVG Flowchart */}
               <div className="h-64 border border-[#F4F4F5] bg-[#FAF9F6] rounded-lg flex items-center justify-center p-4 relative overflow-hidden">
                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 240">
+                  <defs>
+                    <marker
+                      id="arrow"
+                      viewBox="0 0 10 10"
+                      refX="6"
+                      refY="5"
+                      markerWidth="6"
+                      markerHeight="6"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#DC2626" />
+                    </marker>
+                    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#FF8A8A" />
+                      <stop offset="100%" stopColor="#DC2626" />
+                    </radialGradient>
+                  </defs>
+
                   {(() => {
                     const N = currentFlow.length;
                     const cx = 200;
@@ -222,40 +286,73 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                       };
                     });
 
-                    // Build path description for the loop
-                    let pathD = '';
-                    if (points.length > 0) {
-                      pathD = `M ${points[0].x} ${points[0].y}`;
-                      for (let i = 1; i < points.length; i++) {
-                        pathD += ` L ${points[i].x} ${points[i].y}`;
+                    // Build list of edges (curved paths)
+                    const edges: { d: string; key: string }[] = [];
+                    if (N === 2) {
+                      // Beautiful cubic bezier curves sweeping wide outside the nodes
+                      edges.push({
+                        d: "M 245 55 C 370 55, 370 185, 245 185",
+                        key: "edge-0"
+                      });
+                      edges.push({
+                        d: "M 155 185 C 30 185, 30 55, 155 55",
+                        key: "edge-1"
+                      });
+                    } else if (N > 0) {
+                      // Clockwise curves for N > 2
+                      for (let i = 0; i < N; i++) {
+                        const p1 = points[i];
+                        const p2 = points[(i + 1) % N];
+                        const adj = getAdjustedPoints(p1, p2, 35);
+                        const dx = adj.end.x - adj.start.x;
+                        const dy = adj.end.y - adj.start.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const r = dist * 1.3;
+                        edges.push({
+                          d: `M ${adj.start.x} ${adj.start.y} A ${r} ${r} 0 0 1 ${adj.end.x} ${adj.end.y}`,
+                          key: `edge-${i}`
+                        });
                       }
-                      pathD += ' Z';
                     }
 
                     return (
                       <>
-                        {/* Background track */}
-                        {pathD && (
+                        {/* Background tracks */}
+                        {edges.map((edge) => (
                           <path 
-                            d={pathD} 
+                            key={`bg-${edge.key}`}
+                            d={edge.d} 
                             fill="none" 
                             stroke="#E4E4E7" 
-                            strokeWidth="2" 
-                            strokeDasharray="4 4"
-                          />
-                        )}
-
-                        {/* Animated active flow dash */}
-                        {pathD && (
-                          <path 
-                            d={pathD} 
-                            fill="none" 
-                            stroke="#18181B" 
                             strokeWidth="2.5" 
-                            strokeDasharray="8 8"
-                            className="animate-[pulse_1.5s_infinite]"
+                            strokeLinecap="round"
                           />
-                        )}
+                        ))}
+
+                        {/* Animated active flow dash lines */}
+                        {edges.map((edge) => (
+                          <path 
+                            key={`active-${edge.key}`}
+                            d={edge.d} 
+                            fill="none" 
+                            stroke="#DC2626" 
+                            strokeWidth="2.5" 
+                            strokeDasharray="6 6"
+                            markerEnd="url(#arrow)"
+                            className="flow-line"
+                          />
+                        ))}
+
+                        {/* Glowing sliding energy pulses */}
+                        {edges.map((edge) => (
+                          <circle 
+                            key={`pulse-${edge.key}`}
+                            r="5" 
+                            fill="url(#glow)"
+                          >
+                            <animateMotion dur="2.4s" repeatCount="indefinite" path={edge.d} />
+                          </circle>
+                        ))}
 
                         {/* Draw nodes */}
                         {points.map((pt, i) => {
@@ -271,7 +368,7 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                                 rx="4" 
                                 fill={isOrigin ? "#18181B" : "#FFFFFF"} 
                                 stroke={isOrigin ? "#18181B" : "#E4E4E7"} 
-                                strokeWidth="1" 
+                                strokeWidth="1.5" 
                                 className="shadow-xs"
                               />
                               <text 
@@ -289,10 +386,10 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                         })}
 
                         {/* Middle status indicator text */}
-                        <text x="200" y="115" textAnchor="middle" fill="#71717A" fontSize="7" fontWeight="bold" className="font-mono tracking-wider">
+                        <text x="200" y="112" textAnchor="middle" fill="#71717A" fontSize="7" fontWeight="bold" className="font-mono tracking-wider">
                           CLOSED CONVERSION
                         </text>
-                        <text x="200" y="130" textAnchor="middle" fill="#18181B" fontSize="12" fontWeight="extrabold" className="font-mono">
+                        <text x="200" y="128" textAnchor="middle" fill="#18181B" fontSize="12" fontWeight="extrabold" className="font-mono">
                           {formatCurrency(currentTrip.total_amount ?? currentTrip.totalAmount ?? currentTrip.min_amount ?? 0)}
                         </text>
                       </>
@@ -303,12 +400,47 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
             </div>
 
             {/* Diagnosis Info */}
-            <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 space-y-3.5">
-              <div>
-                <span className="text-[10px] text-[#E11D48] bg-[#FFF1F2] border border-[#FFE4E6] px-2 py-0.5 rounded font-semibold uppercase tracking-wider font-mono">
-                  Reason Flagged
-                </span>
-                <h3 className="text-xs font-bold text-[#18181B] mt-2 font-sans">Analytical Ledger Disclosures</h3>
+            <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F4F4F5] pb-3">
+                <div>
+                  <span className="text-[10px] text-[#E11D48] bg-[#FFF1F2] border border-[#FFE4E6] px-2 py-0.5 rounded font-semibold uppercase tracking-wider font-mono">
+                    Reason Flagged
+                  </span>
+                  <h3 className="text-xs font-bold text-[#18181B] mt-2 font-sans">Analytical Ledger Disclosures</h3>
+                </div>
+                
+                {(() => {
+                  // Extract statement ID from the current loop nodes
+                  const nodesList = currentFlow;
+                  let stmtId: string | null = null;
+                  for (const node of nodesList) {
+                    if (node.startsWith("STMT:")) {
+                      stmtId = node.replace("STMT:", "");
+                      break;
+                    }
+                  }
+                  if (!stmtId) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 bg-[#FAF9F6] border border-[#E4E4E7] px-2 py-1 rounded-md text-[10px] text-[#52525B] font-mono shrink-0">
+                      <span>Statement ID:</span>
+                      <span className="font-bold select-all truncate max-w-[120px]">{stmtId}</span>
+                      <button
+                        onClick={() => {
+                          if (stmtId) {
+                            navigator.clipboard.writeText(stmtId);
+                            setCopiedId(stmtId);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }
+                        }}
+                        className={`font-sans font-bold cursor-pointer hover:underline pl-1 border-l border-[#E4E4E7] ${
+                          copiedId === stmtId ? 'text-green-600 hover:text-green-700' : 'text-[#2563EB] hover:text-blue-700'
+                        }`}
+                      >
+                        {copiedId === stmtId ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
               
               {isLoadingExplanation ? (
@@ -317,9 +449,34 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                   <span className="text-xs text-[#71717A] font-light">Retrieving explanation context...</span>
                 </div>
               ) : (
-                <p className="text-xs text-[#52525B] leading-relaxed font-light font-sans">
-                  {explanation || "Apex Venture Corp routed this circular stream back into origin account to artificially inflate capital counts, bypassing local AML taxes."}
-                </p>
+                <div className="space-y-4">
+                  {explanation?.narrative && (
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-bold text-[#71717A] uppercase font-mono block">Narrative Brief</span>
+                      <p className="text-xs text-[#52525B] leading-relaxed font-light font-sans bg-[#FAF9F6] p-3 rounded-lg border border-[#E4E4E7]">
+                        {explanation.narrative}
+                      </p>
+                    </div>
+                  )}
+                  {explanation?.why && explanation.why.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-bold text-[#71717A] uppercase font-mono block">Diagnostic Indicators</span>
+                      <ul className="space-y-1.5">
+                        {explanation.why.map((item, index) => (
+                          <li key={index} className="text-xs text-[#52525B] font-sans flex items-start gap-2">
+                            <span className="text-[#DC2626] font-bold mt-0.5">•</span>
+                            <span className="font-light leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {!explanation?.narrative && !explanation?.why && (
+                    <p className="text-xs text-[#52525B] leading-relaxed font-light font-sans bg-[#FAF9F6] p-3 rounded-lg border border-[#E4E4E7]">
+                      No explanation context available.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
