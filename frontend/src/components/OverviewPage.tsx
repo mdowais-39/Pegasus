@@ -47,14 +47,19 @@ interface OverviewPageProps {
   onNavigateToView: (view: string) => void;
 }
 
+const ALLOWED_EXT = ["pdf", "csv", "xlsx", "xls", "docx", "txt", "png", "jpg", "jpeg"];
+
 export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
   const { 
     latestStatementId, 
     setLatestStatementId, 
+    statements,
     refreshStatements, 
     caseSummary, 
     refreshSummary,
-    setCaseId
+    setCaseId,
+    deleteUploadedStatement,
+    clearDatabaseSession
   } = useFinintelData();
 
   const [dragActive, setDragActive] = useState(false);
@@ -92,6 +97,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
   });
 
   const [ocrProgress, setOcrProgress] = useState<number>(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Map backend status and stage to visual nodes
   const updateNodeStates = (status: string, stage: string | null, progress: number) => {
@@ -321,30 +327,97 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  // Traverses directory drops recursively
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+
+    if (e.dataTransfer.items) {
+      const files: File[] = [];
+      const promises: Promise<void>[] = [];
+
+      const traverseFileTree = (item: any, path = "") => {
+        if (item.isFile) {
+          promises.push(
+            new Promise<void>((resolve) => {
+              item.file((file: File) => {
+                files.push(file);
+                resolve();
+              });
+            })
+          );
+        } else if (item.isDirectory) {
+          const dirReader = item.createReader();
+          promises.push(
+            new Promise<void>((resolve) => {
+              const readAllEntries = () => {
+                dirReader.readEntries((entries: any[]) => {
+                  if (entries.length > 0) {
+                    entries.forEach(entry => traverseFileTree(entry, path + item.name + "/"));
+                    readAllEntries();
+                  } else {
+                    resolve();
+                  }
+                });
+              };
+              readAllEntries();
+            })
+          );
+        }
+      };
+
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i].webkitGetAsEntry();
+        if (item) {
+          traverseFileTree(item);
+        }
+      }
+
+      await Promise.all(promises);
+      if (files.length > 0) {
+        addFiles(files);
+      }
+    } else if (e.dataTransfer.files) {
       addFiles(e.dataTransfer.files);
     }
   };
 
-  const triggerSearchFile = () => {
+  const triggerSearchFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
     const fileSelector = document.createElement('input');
     fileSelector.type = 'file';
     fileSelector.multiple = true;
     fileSelector.accept = '.pdf,.csv,.xlsx,.xls,.docx,.txt,image/*';
-    fileSelector.onchange = (e: any) => {
-      if (e.target.files && e.target.files.length > 0) {
-        addFiles(e.target.files);
+    fileSelector.onchange = (evt: any) => {
+      if (evt.target.files && evt.target.files.length > 0) {
+        addFiles(evt.target.files);
+      }
+    };
+    fileSelector.click();
+  };
+
+  const triggerSearchFolder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const fileSelector = document.createElement('input');
+    fileSelector.type = 'file';
+    fileSelector.webkitdirectory = true;
+    // @ts-ignore
+    fileSelector.directory = true;
+    fileSelector.multiple = true;
+    fileSelector.onchange = (evt: any) => {
+      if (evt.target.files && evt.target.files.length > 0) {
+        addFiles(evt.target.files);
       }
     };
     fileSelector.click();
   };
 
   const addFiles = (files: FileList | File[]) => {
-    const arr = Array.from(files);
+    const arr = Array.from(files).filter(file => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      return ALLOWED_EXT.includes(ext);
+    });
     setPendingFiles(prev => [...prev, ...arr]);
     if (pipelineStatus === 'completed') {
       setPipelineStatus('idle');
@@ -446,7 +519,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
         }
       `}</style>
 
-      {/* Header Block */}
+      {/* Header Block Centered in Middle */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-extrabold tracking-tight text-[#18181B] font-display">
           Forensic Processing Engine
@@ -472,7 +545,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           onDragOver={handleDrag}
           onDragLeave={handleDrag}
           onDrop={handleDrop}
-          onClick={triggerSearchFile}
+          onClick={(e) => triggerSearchFile(e)}
           className={`border border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
             dragActive 
               ? 'border-[#2563EB] bg-[#EFF6FF] ring-2 ring-[#EFF6FF]' 
@@ -482,9 +555,12 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           <div className="w-12 h-12 rounded-full bg-[#FAF9F6] flex items-center justify-center text-[#71717A] mb-4 border border-[#F4F4F5]">
             <UploadCloud className="w-6 h-6 text-[#18181B]" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className="text-sm font-semibold text-[#18181B]">
-              Drag & drop diagnostic ledger sheets, or <span className="text-[#2563EB] underline font-bold">browse workstation</span>
+              Drag & drop ledger sheets/folders, or{' '}
+              <span onClick={(e) => triggerSearchFile(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse files</span>
+              {' '}or{' '}
+              <span onClick={(e) => triggerSearchFolder(e)} className="text-[#2563EB] underline font-bold cursor-pointer hover:text-blue-700">browse folder</span>
             </p>
             <p className="text-[11px] text-[#71717A] font-light">
               Maximum dataset ingestion capability: 100MB per bundle
@@ -495,6 +571,12 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
         {/* Selected Pending Files with red X button */}
         {pendingFiles.length > 0 && (
           <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-bold text-[#52525B] uppercase tracking-wider">
+                Pending Files Queue ({pendingFiles.length})
+              </h3>
+            </div>
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {pendingFiles.map((file, idx) => (
                 <div 
@@ -538,12 +620,127 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                   className="px-6 py-2.5 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md hover:shadow-lg focus:outline-none"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Start Forensic Analysis Pipeline ({pendingFiles.length} {pendingFiles.length === 1 ? 'file' : 'files'})</span>
+                  <span>Start Forensic Analysis Pipeline</span>
                 </button>
               </div>
             )}
           </div>
         )}
+
+        {/* Ingested Statements Portfolio with statement ID and delete red X button */}
+        {statements.length > 0 && (
+          <div className="space-y-3 pt-6 border-t border-[#E4E4E7] animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#52525B] uppercase tracking-wider">
+                Ingested Statements Portfolio
+              </h3>
+              <span className="text-[10px] text-[#71717A] font-mono">
+                {statements.length} statements active in session
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {statements.map(file => (
+                <div 
+                  key={file.id} 
+                  onClick={() => {
+                    setLatestStatementId(file.id);
+                    setCaseId(file.id);
+                  }}
+                  className={`bg-white border p-3 px-4 rounded-xl flex items-center justify-between hover:border-[#A1A1AA] transition-all cursor-pointer relative shadow-[0_2px_6px_rgba(0,0,0,0.015)] ${
+                    latestStatementId === file.id ? 'border-[#18181B] ring-1 ring-zinc-950' : 'border-[#E4E4E7]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-[#FAF9F6] rounded-lg border border-[#F4F4F5] text-[#18181B] shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 pr-4">
+                      <h3 className="text-xs font-bold text-[#18181B] truncate">{file.filename}</h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-[9px] text-[#71717A] font-mono select-all bg-zinc-50 px-1 py-0.5 rounded border border-zinc-200/50 truncate max-w-[150px]" title={file.id}>
+                          Statement ID: {file.id}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(file.id);
+                            setCopiedId(file.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className={`text-[9px] font-semibold cursor-pointer hover:underline ${
+                            copiedId === file.id ? 'text-green-600 hover:text-green-700' : 'text-[#2563EB] hover:text-blue-700'
+                          }`}
+                        >
+                          {copiedId === file.id ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="text-[9.5px] text-[#71717A] mt-0.5 font-light">
+                        Bank: {file.bank_name || 'Generic'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      file.status === 'completed' ? 'text-[#065F46] bg-[#ECFDF5] border border-[#A7F3D0]' :
+                      file.status === 'failed' ? 'text-red-800 bg-red-50 border border-red-200' : 'text-blue-800 bg-blue-50 border border-blue-200'
+                    }`}>
+                      <span className={`w-1 h-1 rounded-full inline-block ${
+                        file.status === 'completed' ? 'bg-[#10B981]' : file.status === 'failed' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'
+                      }`}></span>
+                      {file.status}
+                    </div>
+
+                    {/* Delete button (small red x in right corner of uploaded statements) */}
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete statement "${file.filename}" and its associated transactions from DB?`)) {
+                          try {
+                            await deleteUploadedStatement(file.id);
+                          } catch (err: any) {
+                            alert(`Failed to delete: ${err.message}`);
+                          }
+                        }
+                      }}
+                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] cursor-pointer shadow-xs transition-colors focus:outline-none"
+                      title="Delete Statement"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Clear Database Session Button positioned at bottom-right */}
+        <div className="flex justify-end pt-1">
+          <button
+            type="button"
+            onClick={async () => {
+              if (window.confirm("Are you sure you want to clear the entire PostgreSQL database? This will purge all statements and analysis results.")) {
+                setActiveLogMsg("Clearing database...");
+                try {
+                  await clearDatabaseSession();
+                  setActiveLogMsg("Database successfully cleared.");
+                  setPipelineStatus('idle');
+                  resetNodeStatesToInitial();
+                } catch (err: any) {
+                  alert(`Error: ${err.message}`);
+                }
+              }
+            }}
+            className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-xs focus:outline-none transition-colors"
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            <span>Clear Database</span>
+          </button>
+        </div>
       </div>
 
       {/* SECTION 2: INTERACTIVE VISUAL WORKFLOW CANVASES */}
