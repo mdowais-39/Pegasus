@@ -14,7 +14,8 @@ import {
 
 export async function uploadStatement(file: File, bankName?: string): Promise<UploadResponse> {
   const formData = new FormData();
-  formData.append("file", file);
+  const baseName = file.name.split('/').pop()?.split('\\').pop() || file.name;
+  formData.append("file", file, baseName);
   if (bankName) {
     formData.append("bank_name", bankName);
   }
@@ -84,4 +85,16 @@ export async function getHealth(): Promise<any> {
 
 export async function getServicesHealth(): Promise<any> {
   return apiRequest<any>("/services/health");
+}
+
+export async function deleteStatement(statementId: string): Promise<any> {
+  return apiRequest<any>(`/api/v1/statements/${statementId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function clearDatabase(): Promise<any> {
+  return apiRequest<any>("/api/v1/database/clear", {
+    method: "POST",
+  });
 }
