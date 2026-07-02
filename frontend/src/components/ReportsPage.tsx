@@ -1,48 +1,91 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileDown, CheckCircle, RefreshCw, AlertTriangle, FileText } from 'lucide-react';
+import { 
+  FileDown, 
+  CheckCircle, 
+  RefreshCw, 
+  AlertTriangle, 
+  FileText, 
+  ChevronDown, 
+  Check, 
+  Copy, 
+  ArrowRight, 
+  ShieldAlert, 
+  Layers, 
+  TrendingUp, 
+  Calendar, 
+  Database,
+  Loader2
+} from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
-import { getReportJson, getStatementTransactions } from '../services/finintelApi';
+import { 
+  getReportJson, 
+  getStatementTransactions, 
+  getRoundTrips, 
+  getTopSuspicious 
+} from '../services/finintelApi';
 import { downloadReport } from '../services/downloads';
+import { RoundTrip } from '../types/api';
 
 export default function ReportsPage() {
-  const { caseId, setCaseId, latestStatementId, caseSummary } = useFinintelData();
+  const { caseId, setCaseId, latestStatementId, caseSummary, statements = [] } = useFinintelData();
 
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Live report data
+  // Custom Scope dropdown state
+  const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false);
+
+  // Live report dashboard states
   const [reportJson, setReportJson] = useState<any>(null);
   const [suspiciousTxs, setSuspiciousTxs] = useState<any[]>([]);
+  const [suspiciousAccounts, setSuspiciousAccounts] = useState<any[]>([]);
+  const [roundTripsList, setRoundTripsList] = useState<RoundTrip[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Copy indicators
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadReportData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setReportJson(null);
     setSuspiciousTxs([]);
+    setSuspiciousAccounts([]);
+    setRoundTripsList([]);
     try {
+      // 1. Fetch Executive Report JSON
       const data = await getReportJson(caseId);
       setReportJson(data);
       
       const txs = data?.suspicious_transactions || data?.transactions || [];
       if (txs.length > 0) {
         setSuspiciousTxs(txs);
-      } else if (caseId !== 'all') {
-        // Fallback: load transactions directly from statement
+      } else if (caseId && caseId !== 'all') {
         const stmtTxs = await getStatementTransactions(caseId, 1, 30);
-        // Filter highly suspicious or failed or just show the top ones
         const suspicious = stmtTxs.filter(t => t.is_failed || !t.is_valid || (t.confidence_score !== null && t.confidence_score < 0.9));
         setSuspiciousTxs(suspicious.length > 0 ? suspicious : stmtTxs.slice(0, 5));
+      }
+
+      // 2. Fetch Top Suspicious Accounts
+      const suspiciousResponse = await getTopSuspicious(caseId, 12);
+      if (suspiciousResponse && suspiciousResponse.accounts) {
+        setSuspiciousAccounts(suspiciousResponse.accounts);
+      }
+
+      // 3. Fetch Round Trips
+      const roundTripsResponse = await getRoundTrips(caseId);
+      if (roundTripsResponse && roundTripsResponse.round_trips) {
+        setRoundTripsList(roundTripsResponse.round_trips);
       }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to load report preview from gateway.");
       
-      // Fallback: If report microservice is down, populate suspicious transactions list from transactions endpoint
-      if (caseId !== 'all') {
+      // Fallback populated locally if microservices are down
+      if (caseId && caseId !== 'all') {
         try {
           const stmtTxs = await getStatementTransactions(caseId, 1, 10);
           setSuspiciousTxs(stmtTxs.slice(0, 5));
@@ -99,46 +142,100 @@ export default function ReportsPage() {
     }
   };
 
-  const formatCurrency = (val: number) => {
+  const copyToClipboard = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const formatCurrency = (val: any) => {
+    const num = Number(val) || 0;
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0
-    }).format(val);
+    }).format(num);
+  };
+
+  const safeSlice = (str: any, start: number, end: number) => {
+    if (typeof str !== 'string') return '';
+    return str.slice(start, end);
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-10 animate-fade-in select-none">
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-8 animate-fade-in select-none">
       
       {/* Upper toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E4E4E7] pb-6">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight text-[#18181B] font-display">Investigation Report</h1>
-          <p className="text-sm text-[#71717A] mt-1 font-light font-sans">Certified compliance and forensic brief compilation.</p>
+          <p className="text-sm text-[#71717A] font-light font-sans">Certified compliance and forensic brief compilation.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* Case Selection Selector */}
-          <div className="flex items-center gap-2 bg-white border border-[#E4E4E7] rounded-lg p-1.5 shrink-0 shadow-xs">
-            <span className="text-[10px] uppercase font-bold text-[#71717A] font-mono px-2">Scope</span>
-            <select
-              value={caseId}
-              onChange={(e) => setCaseId(e.target.value)}
-              className="bg-transparent border-0 hover:border-0 rounded text-xs font-semibold focus:ring-0 cursor-pointer font-sans text-zinc-950 p-1 pr-6"
+          {/* Custom Case Scope Dropdown Selector */}
+          <div className={`relative self-start shrink-0 ${isScopeDropdownOpen ? 'z-50' : 'z-30'}`}>
+            {isScopeDropdownOpen && (
+              <div className="fixed inset-0 z-40" onClick={() => setIsScopeDropdownOpen(false)} />
+            )}
+            <button
+              type="button"
+              onClick={() => setIsScopeDropdownOpen(!isScopeDropdownOpen)}
+              className="flex items-center justify-between gap-2.5 bg-white border border-[#E4E4E7] hover:border-zinc-400 rounded-lg p-2 px-3 text-xs font-semibold text-zinc-950 shadow-xs cursor-pointer min-w-[170px] relative transition-all"
             >
-              <option value="all">Whole Network (all)</option>
-              {latestStatementId && (
-                <option value={latestStatementId}>Current Statement ({latestStatementId.slice(0, 8)}...)</option>
-              )}
-            </select>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-bold text-[#71717A] font-mono pr-2 border-r border-[#E4E4E7]">Scope</span>
+                <span className="truncate max-w-[130px] font-medium text-zinc-900">
+                  {caseId === 'all' 
+                    ? 'Whole Network (all)' 
+                    : `Current Statement (${safeSlice(caseId, 0, 8)}...)`}
+                </span>
+              </div>
+              <ChevronDown className="w-3 h-3 text-[#71717A] ml-1" />
+            </button>
+            
+            {isScopeDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-64 bg-white border border-[#E4E4E7] rounded-xl shadow-lg z-50 py-1.5 max-h-60 overflow-y-auto animate-fade-in">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaseId('all');
+                    setIsScopeDropdownOpen(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                    caseId === 'all' ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                  }`}
+                >
+                  <span>Whole Network (all)</span>
+                  {caseId === 'all' && <Check className="w-3.5 h-3.5 text-zinc-800" />}
+                </button>
+                
+                {latestStatementId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCaseId(latestStatementId);
+                      setIsScopeDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                      caseId === latestStatementId ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                    }`}
+                  >
+                    <span>Current Statement ({safeSlice(latestStatementId, 0, 8)}...)</span>
+                    {caseId === latestStatementId && <Check className="w-3.5 h-3.5 text-zinc-800" />}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action triggers */}
           <div className="flex gap-2.5 w-full sm:w-auto">
             <button
               onClick={handleExportExcel}
-              disabled={isExportingExcel || isExportingPDF || isExportingDocx}
-              className="flex-1 sm:flex-initial px-3.5 py-1.8 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
+              disabled={isExportingExcel || isExportingPDF || isExportingDocx || isLoading}
+              className="flex-1 sm:flex-initial px-3.5 py-2 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
             >
               {isExportingExcel ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#71717A]" />
@@ -150,8 +247,8 @@ export default function ReportsPage() {
 
             <button
               onClick={handleExportDocx}
-              disabled={isExportingExcel || isExportingPDF || isExportingDocx}
-              className="flex-1 sm:flex-initial px-3.5 py-1.8 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
+              disabled={isExportingExcel || isExportingPDF || isExportingDocx || isLoading}
+              className="flex-1 sm:flex-initial px-3.5 py-2 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
             >
               {isExportingDocx ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#71717A]" />
@@ -163,8 +260,8 @@ export default function ReportsPage() {
 
             <button
               onClick={handleExportPDF}
-              disabled={isExportingExcel || isExportingPDF || isExportingDocx}
-              className="flex-1 sm:flex-initial px-3.5 py-1.8 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
+              disabled={isExportingExcel || isExportingPDF || isExportingDocx || isLoading}
+              className="flex-1 sm:flex-initial px-3.5 py-2 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
             >
               {isExportingPDF ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
@@ -185,112 +282,337 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Master report body */}
-      <div className="space-y-8 text-[#18181B]">
-        
-        {/* Module 1: Investigation Summary */}
-        <div className="space-y-2 font-sans bg-white border border-[#E4E4E7] p-5 rounded-xl">
-          <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono flex justify-between items-center">
-            <span>1. Investigation Summary</span>
-            {error && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 uppercase font-mono">Offline Fallback</span>}
-          </h2>
-          <p className="text-xs text-[#52525B] leading-relaxed font-light mt-2">
-            {reportJson?.summary || 
-              `This formal dossier consolidates multi-jurisdictional financial flow indices identified during the parsing phase. The forensic audit isolated a structured circular pathway. Total volume processed is ${
-                formatCurrency(caseSummary?.total_credit || 0)
-              } credits and ${
-                formatCurrency(caseSummary?.total_debit || 0)
-              } debits across ${caseSummary?.statements || 1} statement files.`}
-          </p>
+      {isLoading ? (
+        <div className="h-[36rem] border border-[#E4E4E7] bg-white rounded-xl flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-zinc-800" />
+          <p className="text-xs text-[#71717A] font-light">Compiling global case brief logs...</p>
         </div>
-
-        {/* Module 2: Suspicious Transactions */}
-        <div className="space-y-3 font-sans">
-          <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono">
-            2. High Risk / Suspicious Transactions
-          </h2>
+      ) : (
+        /* Primary Report Dashboard Layout */
+        <div className="space-y-6">
           
-          {suspiciousTxs.length === 0 ? (
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-center text-zinc-500 font-light">
-              No suspicious transaction flags logged for this case scope.
-            </div>
-          ) : (
-            <div className="overflow-hidden border border-[#E4E4E7] rounded-xl text-xs">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-[#FAF9F6] border-b border-[#E4E4E7] text-[10px] uppercase font-bold text-[#71717A] font-mono">
-                    <th className="p-3 pl-4">Sender / UPI ID</th>
-                    <th className="p-3">Receiver / Account</th>
-                    <th className="p-3">Narration</th>
-                    <th className="p-3 text-right pr-4">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E4E4E7] bg-white font-sans">
-                  {suspiciousTxs.map((tx, idx) => (
-                    <tr key={tx.id || idx} className="hover:bg-[#FAFAFA]">
-                      <td className="p-3 pl-4 font-semibold text-[#18181B] max-w-[150px] truncate" title={tx.sender_account || tx.sender || 'N/A'}>
-                        {tx.upi_id || tx.sender_account || tx.sender || 'N/A'}
-                      </td>
-                      <td className="p-3 text-[#52525B] max-w-[150px] truncate" title={tx.receiver_account || tx.receiver || 'N/A'}>
-                        {tx.receiver_account || tx.receiver || 'N/A'}
-                      </td>
-                      <td className="p-3 text-[#71717A] font-light max-w-sm truncate" title={tx.narration || ''}>
-                        {tx.narration || 'Unspecified narration'}
-                      </td>
-                      <td className="p-3 text-right font-bold pr-4 text-[#18181B] font-mono">
-                        {formatCurrency(tx.amount || 0)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Module 3: Round Trips */}
-        <div className="space-y-3 font-sans">
-          <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono">
-            3. Round Trips Analysis Summary
-          </h2>
-          <div className="p-5 bg-white border border-[#E4E4E7] rounded-xl text-xs space-y-3">
-            <div className="flex justify-between items-center bg-[#FAF9F6] p-2.5 rounded border border-[#E4E4E7] font-semibold text-[#18181B]">
-              <span className="font-sans">Closed Capital Conversion Cycles</span>
-              <strong className="font-mono text-rose-700 font-bold">
-                {caseSummary?.failed_or_reversed !== undefined ? `${caseSummary.failed_or_reversed} anomalies flagged` : 'N/A'}
-              </strong>
-            </div>
-            <p className="text-[#52525B] font-light leading-relaxed">
-              Forensic scanning isolates structured circular pathways designed to inflate corporate asset values and bypass tax jurisdictions. Detailed traces can be observed directly within the Round Trips interface.
+          {/* Executive Case Brief Summary */}
+          <div className="bg-white border border-[#E4E4E7] p-5 rounded-xl space-y-2">
+            <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono flex justify-between items-center">
+              <span>Investigation Summary Brief</span>
+              {error && (
+                <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 uppercase font-mono">
+                  Offline Fallback
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-[#52525B] leading-relaxed font-light mt-2">
+              {reportJson?.summary || 
+                `This forensic brief consolidates multi-jurisdictional financial flow metrics identified across the case. The audit isolated structured circular flows. Total volume processed is ${
+                  formatCurrency(caseSummary?.total_credit || 0)
+                } credits and ${
+                  formatCurrency(caseSummary?.total_debit || 0)
+                } debits across ${caseSummary?.statements || 1} statement files.`}
             </p>
           </div>
-        </div>
 
-        {/* Module 4: Money Flow */}
-        <div className="space-y-3 font-sans">
-          <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono">
-            4. Money Flow Topology Summary
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="p-4 bg-[#FAF9F6] border border-[#E4E4E7] rounded-xl space-y-1">
-              <span className="text-[10px] text-[#2563EB] font-bold uppercase font-mono">Total Transactions</span>
-              <p className="font-bold text-[#18181B] text-sm">{caseSummary?.transactions || 0} Ledger Items</p>
-              <p className="text-[11px] text-[#71717A] font-light">Extracted transactions mapped to SQL Database.</p>
+          {/* Dual Column Layout for Top Suspicious Accounts and Statement Directory */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            
+            {/* Left Column: Top Suspicious Entities */}
+            <div className="lg:col-span-7 bg-white border border-[#E4E4E7] rounded-xl p-5 flex flex-col space-y-4 shadow-xs">
+              <div className="border-b border-[#F4F4F5] pb-3">
+                <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider font-mono">
+                  Top Suspicious Entities & Risk Profiles
+                </h3>
+                <p className="text-[11px] text-[#71717A] mt-1 font-light font-sans">
+                  Entities ranked by risk score derived from transaction volume, centrality centrality, and anomalies.
+                </p>
+              </div>
+
+              {/* Scrollable Suspicious accounts list panel */}
+              <div className="flex-1 overflow-y-auto max-h-[30rem] pr-1 space-y-3">
+                {suspiciousAccounts.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-zinc-400 font-light">
+                    No suspicious entity records compiled.
+                  </div>
+                ) : (
+                  suspiciousAccounts.map((acct, idx) => {
+                    const acctName = acct?.account || '';
+                    return (
+                      <div 
+                        key={idx}
+                        className="border border-[#E4E4E7] rounded-xl p-4 bg-[#FAF9F6] space-y-3 text-xs"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            {/* Entity Identifier */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-[#18181B] truncate max-w-[180px]" title={acctName}>
+                                {acctName}
+                              </span>
+                              {acctName && (
+                                <button
+                                  onClick={() => copyToClipboard(acctName)}
+                                  className="text-[#2563EB] hover:text-blue-700 font-medium font-sans cursor-pointer text-[10px]"
+                                >
+                                  {copiedId === acctName ? 'Copied' : 'Copy'}
+                                </button>
+                              )}
+                            </div>
+                            
+                            <span className="text-[8.5px] uppercase font-mono font-bold px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded mt-1.5 inline-block">
+                              {acct?.type || 'ACCOUNT'}
+                            </span>
+                          </div>
+
+                          {/* Risk Metrics */}
+                          <div className="text-right shrink-0">
+                            <span className={`text-[9px] uppercase font-bold font-mono px-2 py-0.5 rounded ${
+                              acct?.risk_level === 'HIGH' ? 'bg-red-50 text-red-700 border border-red-200' :
+                              acct?.risk_level === 'MEDIUM' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              'bg-green-50 text-green-700 border border-green-200'
+                            }`}>
+                              {acct?.risk_level || 'LOW'} RISK ({Math.round((acct?.risk_score || 0) * 100)}%)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Source Statement IDs */}
+                        {Array.isArray(acct?.statement_ids) && acct.statement_ids.length > 0 && (
+                          <div className="border-t border-b border-[#F4F4F5] py-2 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-[#71717A] uppercase font-mono">Source Statements:</span>
+                            {acct.statement_ids.map((sid: string, sIdx: number) => {
+                              const sidStr = String(sid || '');
+                              return (
+                                <div 
+                                  key={sIdx}
+                                  className="inline-flex items-center gap-1 bg-white border border-[#E4E4E7] rounded px-1.5 py-0.5 font-mono text-[9px] text-zinc-700 hover:border-[#18181B] transition-colors cursor-pointer"
+                                  onClick={() => copyToClipboard(sidStr)}
+                                >
+                                  <span className="truncate max-w-[80px]" title={sidStr}>{sidStr}</span>
+                                  <span className="text-[8px] text-indigo-600 font-sans font-bold">
+                                    {copiedId === sidStr ? 'Copied' : 'Copy'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Risk factors bullet list */}
+                        {Array.isArray(acct?.patterns) && acct.patterns.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-[#71717A] uppercase font-mono">Risk Indicators:</span>
+                            <ul className="list-disc list-inside text-[10.5px] text-zinc-600 font-light space-y-0.5">
+                              {acct.patterns.map((reason: string, rIdx: number) => (
+                                <li key={rIdx}>{reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
-            <div className="p-4 bg-[#FAF9F6] border border-[#E4E4E7] rounded-xl space-y-1">
-              <span className="text-[10px] text-[#059669] font-bold uppercase font-mono">Identified Entities</span>
-              <p className="font-bold text-[#18181B] text-sm">{caseSummary?.entities || 0} Entities / UPIs</p>
-              <p className="text-[11px] text-[#71717A] font-light">Distinct nodes mapping to financial trails.</p>
+
+            {/* Right Column: Statement Directory + Closed Loop cycles */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+              
+              {/* Ingested Statements directory list */}
+              <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 flex flex-col space-y-4 shadow-xs">
+                <div className="border-b border-[#F4F4F5] pb-2">
+                  <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider font-mono">
+                    Ingested Ledger Directory ({statements.length})
+                  </h3>
+                </div>
+
+                <div className="overflow-y-auto max-h-[12.5rem] pr-1 space-y-2">
+                  {statements.map((stmt) => {
+                    const stmtIdStr = stmt?.id ? String(stmt.id) : '';
+                    return (
+                      <div 
+                        key={stmtIdStr}
+                        className="p-3 border border-[#E4E4E7] rounded-lg bg-[#FAF9F6] flex flex-col justify-between gap-1 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                            <span className="font-bold text-zinc-950 truncate max-w-[130px]" title={stmt?.filename || ''}>
+                              {stmt?.filename || 'Untitled Statement'}
+                            </span>
+                          </div>
+                          <span className={`text-[8px] font-bold uppercase font-mono px-1.5 py-0.5 rounded ${
+                            stmt?.status === 'completed' ? 'bg-green-50 text-green-700 border border-green-200' :
+                            stmt?.status === 'failed' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                          }`}>
+                            {stmt?.status || 'queued'}
+                          </span>
+                        </div>
+
+                        <div className="border-t border-[#E4E4E7]/60 pt-2 flex items-center justify-between text-[9px] font-mono text-[#71717A]">
+                          <div className="flex items-center gap-1">
+                            <span>Stmt ID:</span>
+                            <span className="font-bold text-zinc-800 select-all">
+                              {stmtIdStr ? `${safeSlice(stmtIdStr, 0, 10)}...` : 'N/A'}
+                            </span>
+                            {stmtIdStr && (
+                              <button
+                                onClick={() => copyToClipboard(stmtIdStr)}
+                                className="text-[#2563EB] hover:text-blue-700 font-sans font-bold cursor-pointer"
+                              >
+                                {copiedId === stmtIdStr ? 'Copied' : 'Copy'}
+                              </button>
+                            )}
+                          </div>
+                          {stmt?.bank_name && <span>{stmt.bank_name}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {statements.length === 0 && (
+                    <p className="text-[11px] text-[#71717A] font-light text-center py-6">
+                      No statement records uploaded.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Suspicious Circular Loops List */}
+              <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 flex flex-col space-y-4 shadow-xs flex-1">
+                <div className="border-b border-[#F4F4F5] pb-2">
+                  <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider font-mono">
+                    Circular Transfer Loop Cycles ({roundTripsList.length})
+                  </h3>
+                </div>
+
+                <div className="overflow-y-auto max-h-[14rem] pr-1 space-y-2">
+                  {roundTripsList.map((trip, idx) => {
+                    const nodesList = trip?.nodes || [];
+                    const cyclePath = nodesList.join(" ➔ ");
+                    
+                    // Extract statement ID from the cycle
+                    let stmtId: string | null = null;
+                    for (const node of nodesList) {
+                      if (node && typeof node === 'string' && node.startsWith("STMT:")) {
+                        stmtId = node.replace("STMT:", "");
+                        break;
+                      }
+                    }
+
+                    return (
+                      <div 
+                        key={idx}
+                        className="p-3 border border-[#E4E4E7] rounded-lg bg-[#FAF9F6] space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded">
+                            Cycle #{trip?.id || idx + 1}
+                          </span>
+                          <span className="font-bold text-[#C2410C] font-mono">
+                            {formatCurrency(trip?.min_amount || trip?.total_amount || 0)}
+                          </span>
+                        </div>
+
+                        <p className="font-mono text-[9px] text-[#52525B] leading-normal break-all bg-white border border-zinc-150 p-1.5 rounded">
+                          {cyclePath}
+                        </p>
+
+                        <div className="flex items-center justify-between text-[9px] font-mono text-[#71717A] border-t border-[#E4E4E7]/60 pt-1.5">
+                          <span>Hops: <strong className="font-sans text-zinc-950 font-bold">{trip?.hops || nodesList.length}</strong></span>
+                          {stmtId ? (
+                            <div className="flex items-center gap-1">
+                              <span>Stmt ID:</span>
+                              <span className="font-bold text-zinc-800">{safeSlice(stmtId, 0, 10)}...</span>
+                              <button
+                                onClick={() => copyToClipboard(stmtId!)}
+                                className="text-[#2563EB] hover:text-blue-700 font-sans font-bold cursor-pointer"
+                              >
+                                {copiedId === stmtId ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          ) : (
+                            <span>Scope: Whole Network</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {roundTripsList.length === 0 && (
+                    <p className="text-[11px] text-[#71717A] font-light text-center py-8">
+                      No circular transfer loop cycles detected.
+                    </p>
+                  )}
+                </div>
+              </div>
+
             </div>
-            <div className="p-4 bg-[#FAF9F6] border border-[#E4E4E7] rounded-xl space-y-1">
-              <span className="text-[10px] text-[#DC2626] font-bold uppercase font-mono">Data Duplicates Purged</span>
-              <p className="font-bold text-[#18181B] text-sm">{caseSummary?.duplicates || 0} Redundant Rows</p>
-              <p className="text-[11px] text-[#71717A] font-light">Ledger cleaning Purges completed.</p>
-            </div>
+
           </div>
-        </div>
 
-      </div>
+          {/* Module 4: Suspicious Raw Transactions Log */}
+          <div className="space-y-3 font-sans">
+            <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono">
+              Suspicious Ledger Transactions Audit Log
+            </h2>
+            
+            {suspiciousTxs.length === 0 ? (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-center text-zinc-500 font-light">
+                No high-risk transaction flags logged for this case scope.
+              </div>
+            ) : (
+              <div className="overflow-hidden border border-[#E4E4E7] rounded-xl text-xs">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-[#FAF9F6] border-b border-[#E4E4E7] text-[10px] uppercase font-bold text-[#71717A] font-mono">
+                      <th className="p-3 pl-4">Date</th>
+                      <th className="p-3">Source Statement ID</th>
+                      <th className="p-3">Sender / UPI ID</th>
+                      <th className="p-3">Receiver / Account</th>
+                      <th className="p-3">Narration</th>
+                      <th className="p-3 text-right pr-4">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E4E4E7] bg-white font-sans">
+                    {suspiciousTxs.map((tx, idx) => {
+                      const stmtId = String(tx?.statement_id || caseId || '');
+                      return (
+                        <tr key={tx?.id || idx} className="hover:bg-[#FAFAFA]">
+                          <td className="p-3 pl-4 font-mono text-[#52525B]">{tx?.date || 'N/A'}</td>
+                          <td className="p-3 font-mono text-[10px] text-[#71717A]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate max-w-[100px]" title={stmtId}>{stmtId}</span>
+                              {stmtId && (
+                                <button
+                                  onClick={() => copyToClipboard(stmtId)}
+                                  className="text-[#2563EB] hover:text-blue-700 font-semibold cursor-pointer"
+                                >
+                                  {copiedId === stmtId ? 'Copied' : 'Copy'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 font-semibold text-[#18181B] max-w-[130px] truncate" title={tx?.sender_account || tx?.sender || 'N/A'}>
+                            {tx?.upi_id || tx?.sender_account || tx?.sender || 'N/A'}
+                          </td>
+                          <td className="p-3 text-[#52525B] max-w-[130px] truncate" title={tx?.receiver_account || tx?.receiver || 'N/A'}>
+                            {tx?.receiver_account || tx?.receiver || 'N/A'}
+                          </td>
+                          <td className="p-3 text-[#71717A] font-light max-w-sm truncate" title={tx?.narration || ''}>
+                            {tx?.narration || 'Unspecified narration'}
+                          </td>
+                          <td className="p-3 text-right font-bold pr-4 text-[#18181B] font-mono">
+                            {formatCurrency(tx?.amount || 0)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
