@@ -16,9 +16,14 @@ export class ApiError extends Error {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    const localOverride = localStorage.getItem("finintel_api_base_url");
+    let localOverride = localStorage.getItem("finintel_api_base_url");
     if (localOverride) {
-      return localOverride.trim().replace(/\/$/, "");
+      localOverride = localOverride.trim().replace(/\/$/, "");
+      if (localOverride.toLowerCase().includes("localhot")) {
+        localOverride = localOverride.replace(/localhot/i, "localhost");
+        localStorage.setItem("finintel_api_base_url", localOverride);
+      }
+      return localOverride;
     }
   }
 
