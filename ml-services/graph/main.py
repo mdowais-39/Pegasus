@@ -405,10 +405,45 @@ from services import investigation as inv                  # noqa: E402
 @app.get("/investigation/top-suspicious")
 def investigation_top_suspicious(limit: int = 20, account_only: bool = False,
                                  include_external: bool = True):
+    from services.flow_engine import resolve_counterparty
     rows = _loader.load_all_transactions()
     scored = _risk_for_rows(rows, with_external=include_external)
-    return {"count": len(scored),
-            "accounts": inv.top_suspicious(scored, limit, account_only)}
+    
+    # Map node IDs to statement IDs
+    node_to_statements = {}
+    for r in rows:
+        sid = r.get("statement_id")
+        if not sid:
+            continue
+        sid_str = str(sid)
+        
+        # 1. Main account
+        holder = r.get("account")
+        if holder:
+            node_to_statements.setdefault(str(holder), set()).add(sid_str)
+            
+        # 2. Sender / Receiver
+        sender = r.get("sender_account")
+        if sender:
+            node_to_statements.setdefault(str(sender), set()).add(sid_str)
+        receiver = r.get("receiver_account")
+        if receiver:
+            node_to_statements.setdefault(str(receiver), set()).add(sid_str)
+            
+        # 3. Resolved counterparty
+        counterparty = resolve_counterparty(r.get("narration"))
+        if counterparty:
+            node_to_statements.setdefault(str(counterparty), set()).add(sid_str)
+
+    accounts = inv.top_suspicious(scored, limit, account_only)
+    for acct in accounts:
+        node_id = str(acct.get("account", ""))
+        sids = list(node_to_statements.get(node_id, set()))
+        if node_id.startswith("STMT:") and not sids:
+            sids = [node_id.replace("STMT:", "")]
+        acct["statement_ids"] = sids
+
+    return {"count": len(accounts), "accounts": accounts}
 
 
 @app.get("/investigation/counterparties/{account}")
