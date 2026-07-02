@@ -13,6 +13,7 @@ class PostgresLoader:
             user="postgres",
             password="postgres"
         )
+        self.conn.autocommit = True
 
     def load_latest_statement_transactions(
         self
