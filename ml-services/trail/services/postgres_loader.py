@@ -34,18 +34,22 @@ _ORDER = " ORDER BY t.date NULLS LAST, t.created_at"
 
 
 def _rows(query, params=None):
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query, params or [])
-            rows = cur.fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        for k in ("amount", "balance"):
-            if d.get(k) is not None:
-                d[k] = float(d[k])
-        out.append(d)
-    return out
+    conn = _conn()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params or [])
+                rows = cur.fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            for k in ("amount", "balance"):
+                if d.get(k) is not None:
+                    d[k] = float(d[k])
+            out.append(d)
+        return out
+    finally:
+        conn.close()
 
 
 class PostgresLoader:
