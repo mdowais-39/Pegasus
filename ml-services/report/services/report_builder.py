@@ -4,6 +4,7 @@ ReportBuilder — assembles the investigation report data model from the DB
 risk). Graph enrichment is best-effort so a report is always produced.
 """
 
+import datetime
 import json
 import os
 import urllib.request
@@ -55,6 +56,11 @@ class ReportBuilder:
         report = {
             "title": "Financial Crime Investigation Report",
             "case_id": case_id,
+            "scope": "Whole Network (all statements)" if not scoped
+                     else f"Single statement: {case_id}",
+            "generated_at": datetime.datetime.now(datetime.timezone.utc)
+                            .strftime("%Y-%m-%d %H:%M UTC"),
+            "risk_distribution": self._risk_distribution(top_risks),
             "executive_summary": {
                 "statements": counts.get("statements", 0),
                 "transactions": counts.get("transactions", 0),
@@ -85,6 +91,14 @@ class ReportBuilder:
         }
         persistence.save(case_id, "report", report)
         return report
+
+    def _risk_distribution(self, top_risks):
+        dist = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        for r in top_risks or []:
+            level = r.get("risk_level")
+            if level in dist:
+                dist[level] += 1
+        return dist
 
     def _recommendations(self, mf, round_trips, top_risks, validation):
         recs = []

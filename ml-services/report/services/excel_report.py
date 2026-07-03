@@ -35,15 +35,37 @@ def build_excel(report: dict) -> bytes:
     ws = _sheet(wb, "Summary")
     ws["A1"] = report.get("title", "Investigation Report")
     ws["A1"].font = _TITLE_FONT
+    ws["A2"] = report.get("scope") or f"Case: {report.get('case_id', 'all')}"
+    if report.get("generated_at"):
+        ws["A3"] = f"Generated: {report.get('generated_at')}"
     es = report.get("executive_summary", {})
-    ws.append([])
-    _header_row(ws, ["Metric", "Value"], row=3)
-    r = 4
+    _header_row(ws, ["Metric", "Value"], row=5)
+    r = 6
     for k, v in es.items():
         ws.cell(row=r, column=1, value=k.replace("_", " ").title())
         ws.cell(row=r, column=2, value=v)
         r += 1
+    dist = report.get("risk_distribution") or {}
+    if dist:
+        r += 1
+        ws.cell(row=r, column=1, value="Risk Distribution").font = _TITLE_FONT
+        r += 1
+        for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+            ws.cell(row=r, column=1, value=level.title())
+            ws.cell(row=r, column=2, value=dist.get(level, 0))
+            r += 1
     _autosize(ws)
+
+    # --- Validation ---
+    val = report.get("validation") or {}
+    if val:
+        ws = _sheet(wb, "Validation")
+        _header_row(ws, ["Metric", "Value"])
+        for k in ("total", "valid", "invalid", "duplicates", "failed",
+                  "balance_mismatches", "missing_data", "average_confidence"):
+            if k in val:
+                ws.append([k.replace("_", " ").title(), val.get(k)])
+        _autosize(ws)
 
     # --- Top Risks ---
     ws = _sheet(wb, "Top Risks")
@@ -84,6 +106,13 @@ def build_excel(report: dict) -> bytes:
     _header_row(ws, ["Account", "Total Sent", "Receiver Count"], row=ws.max_row + 1)
     for a in mf.get("source_accounts", []):
         ws.append([a.get("node"), a.get("total_sent"), a.get("receiver_count")])
+    ws.append([])
+    ws.append(["Layering / Pass-through accounts"])
+    _header_row(ws, ["Account", "Total In", "Total Out", "Pass-Through %"],
+                row=ws.max_row + 1)
+    for a in mf.get("layering", []):
+        ws.append([a.get("node"), a.get("total_in"), a.get("total_out"),
+                   round((a.get("passthrough_ratio") or 0) * 100)])
     _autosize(ws)
 
     # --- Entities ---

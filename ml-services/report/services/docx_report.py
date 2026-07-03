@@ -33,10 +33,34 @@ def _table(doc, headers, rows):
 def build_docx(report: dict) -> bytes:
     doc = Document()
     doc.add_heading(report.get("title", "Investigation Report"), level=0)
-    doc.add_paragraph(f"Case: {report.get('case_id', 'all')}")
+    doc.add_paragraph(report.get("scope") or f"Case: {report.get('case_id', 'all')}")
+    if report.get("generated_at"):
+        doc.add_paragraph(f"Generated: {report.get('generated_at')}")
 
     _heading(doc, "Executive Summary")
     _kv_table(doc, report.get("executive_summary", {}))
+
+    dist = report.get("risk_distribution")
+    if dist:
+        _heading(doc, "Risk Distribution", level=2)
+        _table(
+            doc,
+            ["Critical", "High", "Medium", "Low"],
+            [[dist.get("CRITICAL", 0), dist.get("HIGH", 0),
+              dist.get("MEDIUM", 0), dist.get("LOW", 0)]],
+        )
+
+    val = report.get("validation")
+    if val:
+        _heading(doc, "Data Quality & Validation", level=2)
+        avg = val.get("average_confidence")
+        avg_str = f"{round(avg * 100, 1)}%" if isinstance(avg, (int, float)) else "N/A"
+        _table(
+            doc,
+            ["Total", "Duplicates", "Failed/Reversed", "Invalid", "Avg Confidence"],
+            [[val.get("total", 0), val.get("duplicates", 0), val.get("failed", 0),
+              val.get("invalid", 0), avg_str]],
+        )
 
     _heading(doc, "Top Suspicious Accounts")
     _table(
@@ -70,6 +94,27 @@ def build_docx(report: dict) -> bytes:
         [[a.get("node"), a.get("total_received"), a.get("sender_count")]
          for a in mf.get("accumulation_accounts", [])[:10]],
     )
+
+    lay = mf.get("layering", [])[:10]
+    if lay:
+        _heading(doc, "Layering / Pass-Through Accounts", level=2)
+        _table(
+            doc,
+            ["Account", "Total In", "Total Out", "Pass-Through"],
+            [[a.get("node"), a.get("total_in"), a.get("total_out"),
+              f"{round((a.get('passthrough_ratio') or 0) * 100)}%"]
+             for a in lay],
+        )
+
+    entities = report.get("top_entities", [])[:20]
+    if entities:
+        _heading(doc, "Resolved Entities")
+        _table(
+            doc,
+            ["Type", "Identifier", "Display Name"],
+            [[e.get("entity_type"), e.get("identifier"), e.get("display_name")]
+             for e in entities],
+        )
 
     _heading(doc, "Recommendations")
     for rec in report.get("recommendations", []):

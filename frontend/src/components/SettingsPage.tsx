@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Key, Shield, User, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { getApiBaseUrl } from '../services/api';
 import { getHealth, getServicesHealth } from '../services/finintelApi';
+import { getSession } from '../services/auth';
 
 export default function SettingsPage() {
-  const [investigatorName, setInvestigatorName] = useState('Agent Willis');
+  const session = getSession();
+  const [investigatorName, setInvestigatorName] = useState(session?.name || 'Agent Willis');
   const [agencyCode, setAgencyCode] = useState('AML-US-UNIT4');
   const [modelType, setModelType] = useState('gemini-2.5-flash');
   

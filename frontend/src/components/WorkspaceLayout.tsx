@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Layers, LogOut } from "lucide-react";
+import { isAuthenticated, getSession, logout, initials } from "../services/auth";
 
 export default function WorkspaceLayout() {
   const navigate = useNavigate();
@@ -8,14 +9,18 @@ export default function WorkspaceLayout() {
 
   // Route auth guard: redirect if not authenticated
   useEffect(() => {
-    const isAuth = localStorage.getItem("finintel_auth") === "true";
-    if (!isAuth) {
+    if (!isAuthenticated()) {
       navigate("/login");
     }
   }, [navigate]);
 
+  const session = getSession();
+  const displayName = session?.name || "Investigator";
+  const displayDivision = session?.division || "AML Division";
+  const displayInitials = initials(displayName);
+
   const handleSignOut = () => {
-    localStorage.removeItem("finintel_auth");
+    logout();
     navigate("/login");
   };
 
@@ -81,11 +86,11 @@ export default function WorkspaceLayout() {
           
           <div className="flex items-center gap-3 border-l border-[#E4E4E7] pl-4">
             <div className="w-6 h-6 rounded-full bg-[#18181B] flex items-center justify-center text-white text-[10px] font-bold">
-              AW
+              {displayInitials}
             </div>
             <div className="hidden sm:block text-left select-none leading-none">
-              <p className="text-[11px] font-semibold text-[#18181B]">Agent Willis</p>
-              <p className="text-[9px] text-[#71717A] mt-1">AML Division</p>
+              <p className="text-[11px] font-semibold text-[#18181B]">{displayName}</p>
+              <p className="text-[9px] text-[#71717A] mt-1">{displayDivision}</p>
             </div>
             <button
               onClick={handleSignOut}

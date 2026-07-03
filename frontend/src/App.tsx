@@ -9,17 +9,13 @@ import MoneyTrailPage from "./components/MoneyTrailPage";
 import ReportsPage from "./components/ReportsPage";
 import SettingsPage from "./components/SettingsPage";
 import { FinintelDataProvider } from "./context/FinintelDataContext";
+import { isAuthenticated } from "./services/auth";
 
 export default function App() {
   const navigate = useNavigate();
 
   const handleEnterPlatform = () => {
-    const isAuth = localStorage.getItem("finintel_auth") === "true";
-    if (isAuth) {
-      navigate("/workspace");
-    } else {
-      navigate("/login");
-    }
+    navigate(isAuthenticated() ? "/workspace" : "/login");
   };
 
   return (

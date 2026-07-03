@@ -501,20 +501,36 @@ export default function MoneyFlowPage() {
 
                     const isEdgeActive = activeNodeId === conn.from || activeNodeId === conn.to;
                     const isEdgeDimmed = activeNodeId && !isEdgeActive;
-                    const pathD = `M ${startPos.x} ${startPos.y} L ${endPos.x} ${endPos.y}`;
 
-                    const midX = (startPos.x + endPos.x) / 2;
-                    const midY = (startPos.y + endPos.y) / 2;
+                    // Curved (quadratic) edge: bows each edge out along the
+                    // perpendicular so crossing edges separate and A->B / B->A
+                    // don't overlap — the key de-cluttering change for dense graphs.
+                    const dx = endPos.x - startPos.x;
+                    const dy = endPos.y - startPos.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const nx = -dy / dist;
+                    const ny = dx / dist;
+                    const curve = Math.min(55, dist * 0.16);
+                    const mx = (startPos.x + endPos.x) / 2;
+                    const my = (startPos.y + endPos.y) / 2;
+                    const ctrlX = mx + nx * curve;
+                    const ctrlY = my + ny * curve;
+                    const pathD = `M ${startPos.x} ${startPos.y} Q ${ctrlX} ${ctrlY} ${endPos.x} ${endPos.y}`;
+
+                    // Label sits at the curve's midpoint (t=0.5 on the bezier),
+                    // which naturally spreads labels for a busy hub.
+                    const midX = 0.25 * startPos.x + 0.5 * ctrlX + 0.25 * endPos.x;
+                    const midY = 0.25 * startPos.y + 0.5 * ctrlY + 0.25 * endPos.y;
 
                     const markerId = N > 15
                       ? (isEdgeActive ? 'url(#arrow-flow-small-active)' : 'url(#arrow-flow-small)')
                       : (isEdgeActive ? 'url(#arrow-flow-active)' : 'url(#arrow-flow)');
 
                     return (
-                      <g 
-                        key={idx} 
+                      <g
+                        key={idx}
                         className="transition-all duration-300"
-                        style={{ opacity: isEdgeDimmed ? 0.12 : 1 }}
+                        style={{ opacity: isEdgeDimmed ? 0.09 : 1 }}
                       >
                         {/* Background connection track */}
                         <path 
@@ -545,8 +561,9 @@ export default function MoneyFlowPage() {
                           </circle>
                         )}
 
-                        {/* Edge text label container */}
-                        {!isEdgeDimmed && (
+                        {/* Edge amount label — only for the selected node's edges,
+                            so the canvas isn't blanketed with overlapping pills. */}
+                        {isEdgeActive && (
                           <g transform={`translate(${midX}, ${midY})`}>
                             <rect 
                               x="-30" 
