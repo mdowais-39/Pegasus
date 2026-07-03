@@ -409,6 +409,14 @@ def risk_top(limit: int = 20, include_external: bool = True, refresh: bool = Fal
     return {"count": len(scored[:limit]), "top_risks": scored[:limit]}
 
 
+@app.get("/risk/top/statement/{statement_id}")
+def risk_top_statement(statement_id: str, limit: int = 20, include_external: bool = True):
+    """Top fused risks scoped to a single statement (no cross-statement leakage)."""
+    rows = _loader.load_statement_transactions(statement_id)
+    scored = _risk_for_rows(rows, with_external=include_external)
+    return {"count": len(scored[:limit]), "top_risks": scored[:limit]}
+
+
 @app.get("/risk/account/{account}")
 def risk_account(account: str, include_external: bool = True):
     rows = _loader.load_account_transactions(account)
@@ -433,6 +441,17 @@ def investigation_top_suspicious(limit: int = 20, account_only: bool = False,
                                  include_external: bool = True,
                                  refresh: bool = False):
     scored = _risk_all(refresh=refresh, with_external=include_external)
+    return {"count": len(scored),
+            "accounts": inv.top_suspicious(scored, limit, account_only)}
+
+
+@app.get("/investigation/top-suspicious/statement/{statement_id}")
+def investigation_top_suspicious_statement(statement_id: str, limit: int = 20,
+                                           account_only: bool = False,
+                                           include_external: bool = True):
+    """Suspicious accounts scoped to one statement's transactions only."""
+    rows = _loader.load_statement_transactions(statement_id)
+    scored = _risk_for_rows(rows, with_external=include_external)
     return {"count": len(scored),
             "accounts": inv.top_suspicious(scored, limit, account_only)}
 

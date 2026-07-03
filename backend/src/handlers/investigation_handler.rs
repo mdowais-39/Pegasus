@@ -105,24 +105,37 @@ pub async fn money_trail(
 
 pub async fn top_suspicious(
     State(state): State<AppState>,
-    Path(_case_id): Path<String>,
+    Path(case_id): Path<String>,
     Query(q): Query<InvQuery>,
 ) -> ApiResult<Value> {
     let limit = q.limit.unwrap_or(20);
-    let url = format!(
-        "{}/investigation/top-suspicious?limit={}",
-        state.services.graph, limit
-    );
+    let g = &state.services.graph;
+    let url = if case_id == "all" {
+        format!("{}/investigation/top-suspicious?limit={}", g, limit)
+    } else {
+        // scope strictly to the selected statement — no leakage from others
+        format!(
+            "{}/investigation/top-suspicious/statement/{}?limit={}",
+            g,
+            enc(&case_id),
+            limit
+        )
+    };
     Ok(ApiResponse::success(get_json(&state.http_client, &url).await?))
 }
 
 pub async fn top_risks(
     State(state): State<AppState>,
-    Path(_case_id): Path<String>,
+    Path(case_id): Path<String>,
     Query(q): Query<InvQuery>,
 ) -> ApiResult<Value> {
     let limit = q.limit.unwrap_or(20);
-    let url = format!("{}/risk/top?limit={}", state.services.graph, limit);
+    let g = &state.services.graph;
+    let url = if case_id == "all" {
+        format!("{}/risk/top?limit={}", g, limit)
+    } else {
+        format!("{}/risk/top/statement/{}?limit={}", g, enc(&case_id), limit)
+    };
     Ok(ApiResponse::success(get_json(&state.http_client, &url).await?))
 }
 

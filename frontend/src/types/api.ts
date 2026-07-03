@@ -116,6 +116,8 @@ export interface RoundTrip {
   min_amount?: number;
   total_amount?: number;
   totalAmount?: number;
+  // Per-hop transfer amounts, parallel to `nodes` (edge i = node[i] -> node[i+1]).
+  edge_amounts?: number[];
   duration?: string;
   hops?: number;
   [key: string]: any;

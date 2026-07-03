@@ -13,21 +13,45 @@ use crate::{
     state::app_state::AppState,
 };
 
-/// GET /api/v1/cases/{case_id}/summary  — dashboard payload
+fn enc(seg: &str) -> String {
+    seg.replace(' ', "%20").replace('#', "%23").replace('?', "%3F")
+}
+
+/// GET /api/v1/cases/{case_id}/summary  — dashboard payload.
+/// `case_id == "all"` aggregates the whole network; a statement UUID scopes the
+/// counts, top risks and money-flow summary to that statement alone.
 pub async fn case_summary(
     State(state): State<AppState>,
-    Path(_case_id): Path<String>,
+    Path(case_id): Path<String>,
 ) -> ApiResult<Value> {
-    let mut summary = read_repository::case_summary(&state.db).await?;
-
     let g = &state.services.graph;
-    if let Ok(top) = get_json(&state.http_client, &format!("{}/risk/top?limit=5", g)).await {
+    let whole_network = case_id == "all";
+
+    let mut summary = if whole_network {
+        read_repository::case_summary(&state.db).await?
+    } else {
+        read_repository::case_summary_for_statement(&state.db, &case_id).await?
+    };
+
+    let (risk_url, flow_url) = if whole_network {
+        (
+            format!("{}/risk/top?limit=5", g),
+            format!("{}/flow/money-flow/all", g),
+        )
+    } else {
+        (
+            format!("{}/risk/top/statement/{}?limit=5", g, enc(&case_id)),
+            format!("{}/flow/analyze/statement/{}", g, enc(&case_id)),
+        )
+    };
+
+    if let Ok(top) = get_json(&state.http_client, &risk_url).await {
         if let Value::Object(ref mut m) = summary {
             m.insert("top_risks".into(),
                      top.get("top_risks").cloned().unwrap_or(json!([])));
         }
     }
-    if let Ok(mf) = get_json(&state.http_client, &format!("{}/flow/money-flow/all", g)).await {
+    if let Ok(mf) = get_json(&state.http_client, &flow_url).await {
         if let Value::Object(ref mut m) = summary {
             m.insert("money_flow_summary".into(),
                      mf.get("summary").cloned().unwrap_or(Value::Null));

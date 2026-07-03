@@ -110,6 +110,14 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
     }).format(val);
   };
 
+  // Compact ₹ for tight edge labels (₹1.25Cr / ₹3.40L), full amount kept for tooltips.
+  const formatCompact = (val: number) => {
+    const n = Number(val) || 0;
+    if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)}Cr`;
+    if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)}L`;
+    return formatCurrency(n);
+  };
+
   const currentTrip = roundTrips[activeTab];
   const currentFlow = currentTrip ? (currentTrip.accounts || currentTrip.nodes || []) : [];
 
@@ -357,6 +365,43 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                       }
                     }
 
+                    // Edge amount labels (₹) positioned at each hop's midpoint.
+                    // edge_amounts[i] is the transfer from node[i] -> node[(i+1)%N].
+                    const edgeAmounts: number[] = Array.isArray(currentTrip.edge_amounts)
+                      ? currentTrip.edge_amounts
+                      : [];
+                    const edgeLabels: { x: number; y: number; text: string; full: string; from: string; to: string }[] = [];
+                    if (N === 2) {
+                      const spots = [{ x: 330, y: 124 }, { x: 70, y: 124 }];
+                      for (let i = 0; i < 2; i++) {
+                        const amt = edgeAmounts[i];
+                        if (amt == null) continue;
+                        edgeLabels.push({
+                          x: spots[i].x, y: spots[i].y,
+                          text: formatCompact(amt), full: formatCurrency(amt),
+                          from: currentFlow[i % N], to: currentFlow[(i + 1) % N],
+                        });
+                      }
+                    } else if (N > 2) {
+                      for (let i = 0; i < N; i++) {
+                        const amt = edgeAmounts[i];
+                        if (amt == null) continue;
+                        const p1 = points[i];
+                        const p2 = points[(i + 1) % N];
+                        const mx = (p1.x + p2.x) / 2;
+                        const my = (p1.y + p2.y) / 2;
+                        const dx = mx - cx;
+                        const dy = my - cy;
+                        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                        edgeLabels.push({
+                          x: mx + (dx / len) * 16,
+                          y: my + (dy / len) * 16,
+                          text: formatCompact(amt), full: formatCurrency(amt),
+                          from: currentFlow[i], to: currentFlow[(i + 1) % N],
+                        });
+                      }
+                    }
+
                     return (
                       <>
                         {/* Background tracks */}
@@ -434,6 +479,38 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                         <text x="200" y="128" textAnchor="middle" fill="#18181B" fontSize="12" fontWeight="extrabold" className="font-mono">
                           {formatCurrency(currentTrip.total_amount ?? currentTrip.totalAmount ?? currentTrip.min_amount ?? 0)}
                         </text>
+
+                        {/* Per-edge transfer amounts (dark pill so they read on any edge) */}
+                        {edgeLabels.map((lbl, i) => {
+                          const w = Math.max(30, lbl.text.length * 5.4 + 10);
+                          return (
+                            <g key={`amt-${i}`} style={{ pointerEvents: 'auto' }}>
+                              <title>{`${lbl.from} → ${lbl.to}: ${lbl.full}`}</title>
+                              <rect
+                                x={lbl.x - w / 2}
+                                y={lbl.y - 8}
+                                width={w}
+                                height={15}
+                                rx={7.5}
+                                fill="#18181B"
+                                opacity="0.92"
+                                stroke="#3F3F46"
+                                strokeWidth="0.5"
+                              />
+                              <text
+                                x={lbl.x}
+                                y={lbl.y + 2.6}
+                                textAnchor="middle"
+                                fill="#E0F2FE"
+                                fontSize="8"
+                                fontWeight="bold"
+                                className="font-mono"
+                              >
+                                {lbl.text}
+                              </text>
+                            </g>
+                          );
+                        })}
                       </>
                     );
                   })()}

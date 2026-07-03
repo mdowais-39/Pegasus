@@ -14,8 +14,8 @@ use crate::handlers::{
     job_handler::get_job_status,
     report_handler::{case_summary, report_docx, report_excel, report_json, report_pdf},
     statement_handler::{
-        get_statement, get_transactions, get_validation_report, list_statements,
-        upload_statement,
+        clear_database, delete_statement, get_statement, get_transactions,
+        get_validation_report, list_statements, upload_statement,
     },
 };
 use crate::state::app_state::AppState;
@@ -25,9 +25,11 @@ pub fn api_routes() -> Router<AppState> {
         // ---- ingestion ----
         .route("/api/v1/statements/upload", post(upload_statement))
         .route("/api/v1/statements", get(list_statements))
-        .route("/api/v1/statements/{id}", get(get_statement))
+        .route("/api/v1/statements/{id}", get(get_statement).delete(delete_statement))
         .route("/api/v1/statements/{id}/transactions", get(get_transactions))
         .route("/api/v1/statements/{id}/validation-report", get(get_validation_report))
+        // ---- destructive: clear the whole workspace ----
+        .route("/api/v1/database/clear", post(clear_database))
         // ---- jobs ----
         .route("/api/v1/jobs/{job_id}/status", get(get_job_status))
         // legacy alias (param named {id} to satisfy matchit consistency)

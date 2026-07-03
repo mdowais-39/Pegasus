@@ -8,11 +8,14 @@ use crate::{
     api::{ApiResponse, ApiResult, AppError, Pagination},
     models::statement::ProcessingJob,
     repositories::{
+        delete_repository,
         job_repository::insert_job,
         read_repository,
         statement::insert_statement,
     },
-    services::storage::create_statement_directory,
+    services::storage::{
+        clear_all_statement_directories, create_statement_directory, remove_statement_directory,
+    },
     state::app_state::AppState,
 };
 
@@ -156,4 +159,49 @@ pub async fn get_validation_report(
 ) -> ApiResult<Value> {
     let report = read_repository::validation_report(&state.db, &id).await?;
     Ok(ApiResponse::success(report))
+}
+
+/// DELETE /api/v1/statements/{id}
+/// Removes the statement plus all its transactions, jobs, now-orphaned entities,
+/// stored files, and invalidates whole-network analysis caches.
+pub async fn delete_statement(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Value> {
+    let (existed, transactions_removed, entities_removed) =
+        delete_repository::delete_statement_cascade(&state.db, &id).await?;
+
+    if !existed {
+        return Err(AppError::NotFound(format!("statement {} not found", id)));
+    }
+
+    // Best-effort file cleanup — a missing directory must not fail the request.
+    if let Err(e) = remove_statement_directory(&id).await {
+        eprintln!("[WARN] failed to remove statement files for {}: {}", id, e);
+    }
+
+    Ok(ApiResponse::success(json!({
+        "deleted_statement": true,
+        "statement_id": id,
+        "transactions_removed": transactions_removed,
+        "entities_removed": entities_removed
+    })))
+}
+
+/// POST /api/v1/database/clear
+/// Wipes every statement and all derived data — a full workspace reset.
+pub async fn clear_database(State(state): State<AppState>) -> ApiResult<Value> {
+    let (statements_removed, transactions_removed, entities_removed) =
+        delete_repository::clear_all(&state.db).await?;
+
+    if let Err(e) = clear_all_statement_directories().await {
+        eprintln!("[WARN] failed to clear statement storage: {}", e);
+    }
+
+    Ok(ApiResponse::success(json!({
+        "cleared": true,
+        "statements_removed": statements_removed,
+        "transactions_removed": transactions_removed,
+        "entities_removed": entities_removed
+    })))
 }

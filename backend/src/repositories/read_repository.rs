@@ -324,3 +324,48 @@ pub async fn case_summary(db: &PgPool) -> Result<Value, AppError> {
         "total_debit": row.get::<f64, _>("total_debit"),
     }))
 }
+
+/// Case summary scoped to a single statement. `entities` is the count of distinct
+/// counterparties (sender / receiver / UPI) that appear in this statement's
+/// transactions — the entities table is global, so a per-statement figure is
+/// derived from the transactions instead.
+pub async fn case_summary_for_statement(db: &PgPool, id: &str) -> Result<Value, AppError> {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            1::int8 AS statements,
+            (SELECT COUNT(*) FROM transactions WHERE statement_id = $1::uuid) AS transactions,
+            (SELECT COUNT(*) FROM (
+                SELECT sender_account   AS ident FROM transactions
+                    WHERE statement_id = $1::uuid AND sender_account IS NOT NULL
+                UNION
+                SELECT receiver_account FROM transactions
+                    WHERE statement_id = $1::uuid AND receiver_account IS NOT NULL
+                UNION
+                SELECT upi_id           FROM transactions
+                    WHERE statement_id = $1::uuid AND upi_id IS NOT NULL
+            ) x) AS entities,
+            (SELECT COUNT(*) FROM transactions
+                WHERE statement_id = $1::uuid AND is_duplicate) AS duplicates,
+            (SELECT COUNT(*) FROM transactions
+                WHERE statement_id = $1::uuid AND is_failed) AS failed,
+            (SELECT COALESCE(SUM(amount),0)::float8 FROM transactions
+                WHERE statement_id = $1::uuid AND debit_credit = 'CREDIT') AS total_credit,
+            (SELECT COALESCE(SUM(amount),0)::float8 FROM transactions
+                WHERE statement_id = $1::uuid AND debit_credit = 'DEBIT')  AS total_debit
+        "#,
+    )
+    .bind(id)
+    .fetch_one(db)
+    .await?;
+
+    Ok(json!({
+        "statements": row.get::<i64, _>("statements"),
+        "transactions": row.get::<i64, _>("transactions"),
+        "entities": row.get::<i64, _>("entities"),
+        "duplicates": row.get::<i64, _>("duplicates"),
+        "failed_or_reversed": row.get::<i64, _>("failed"),
+        "total_credit": row.get::<f64, _>("total_credit"),
+        "total_debit": row.get::<f64, _>("total_debit"),
+    }))
+}

@@ -18,8 +18,16 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
-import { uploadStatement, getJobStatus, getStatementValidationReport, getStatementTransactions } from '../services/finintelApi';
-import { ValidationReport, BackendTransaction } from '../types/api';
+import {
+  uploadStatement,
+  getJobStatus,
+  getStatementValidationReport,
+  getStatementTransactions,
+  getCaseSummary,
+  getTopSuspicious,
+  getRoundTrips,
+} from '../services/finintelApi';
+import { ValidationReport, BackendTransaction, CaseSummary } from '../types/api';
 
 type NodeStatus = 'queued' | 'running' | 'complete' | 'failed';
 
@@ -98,6 +106,54 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
 
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Whole-network aggregate (across ALL uploaded statements, case_id="all")
+  const [networkSummary, setNetworkSummary] = useState<CaseSummary | null>(null);
+  const [networkSuspicious, setNetworkSuspicious] = useState<any[]>([]);
+  const [networkRoundTrips, setNetworkRoundTrips] = useState<any[]>([]);
+  const [isLoadingNetwork, setIsLoadingNetwork] = useState(false);
+
+  const completedCount = statements.filter((s) => s.status === 'completed').length;
+
+  // Refresh the whole-network panel whenever the set of completed statements changes.
+  useEffect(() => {
+    if (completedCount === 0) {
+      setNetworkSummary(null);
+      setNetworkSuspicious([]);
+      setNetworkRoundTrips([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setIsLoadingNetwork(true);
+      try {
+        const [sum, susp, rt] = await Promise.all([
+          getCaseSummary('all').catch(() => null),
+          getTopSuspicious('all', 5).catch(() => ({ accounts: [] })),
+          getRoundTrips('all').catch(() => ({ round_trips: [] })),
+        ]);
+        if (cancelled) return;
+        setNetworkSummary(sum);
+        setNetworkSuspicious(susp?.accounts || []);
+        setNetworkRoundTrips(rt?.round_trips || []);
+      } finally {
+        if (!cancelled) setIsLoadingNetwork(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [completedCount, pipelineStatus]);
+
+  const formatINR = (val: any) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
+      Number(val) || 0
+    );
+
+  const openWholeNetwork = (view: string) => {
+    setCaseId('all');
+    onNavigateToView(view);
+  };
 
   // Map backend status and stage to visual nodes
   const updateNodeStates = (status: string, stage: string | null, progress: number) => {
@@ -727,9 +783,10 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
         {/* Clear Database Session Button positioned at bottom-right */}
         <div className="flex justify-end pt-1">
           <button
-            type="button; e.stopPropagation()"
-            onClick={async () => {
-              if (window.confirm("Are you sure you want to clear the entire PostgreSQL database? This will purge all statements and analysis results.")) {
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (window.confirm("This will clear ALL statements and reset the investigation workspace. Continue?")) {
                 setActiveLogMsg("Clearing database...");
                 try {
                   await clearDatabaseSession();
@@ -1310,6 +1367,141 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* SECTION 4: WHOLE NETWORK ANALYSIS (aggregate across ALL statements) */}
+      {completedCount > 0 && (
+        <div className="max-w-5xl mx-auto animate-fade-in">
+          <div className="bg-white border border-[#E4E4E7] rounded-xl p-6 space-y-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-[#F4F4F5] pb-3">
+              <div>
+                <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider flex items-center gap-2">
+                  <GitFork className="w-3.5 h-3.5 text-[#2563EB]" />
+                  Whole Network Analysis
+                </h3>
+                <p className="text-[11px] text-[#71717A] font-light mt-0.5">
+                  Aggregated investigation intelligence across all {completedCount} processed statement(s).
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {isLoadingNetwork && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#2563EB]" />}
+                <span className="text-[9px] font-bold text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded-full uppercase">
+                  Scope: All (Aggregate)
+                </span>
+              </div>
+            </div>
+
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+              <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Total Accounts</span>
+                <p className="text-lg font-bold text-[#18181B]">{networkSummary?.entities ?? 0}</p>
+              </div>
+              <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Total Transactions</span>
+                <p className="text-lg font-bold text-[#18181B]">
+                  {Number(networkSummary?.transactions ?? 0).toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">High-Risk Accounts</span>
+                <p className="text-lg font-bold text-[#DC2626]">
+                  {(networkSummary?.top_risks || []).filter((r: any) => ['HIGH', 'CRITICAL'].includes(r?.risk_level)).length
+                    || networkSuspicious.filter((a: any) => ['HIGH', 'CRITICAL'].includes(a?.risk_level)).length}
+                </p>
+              </div>
+              <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-3 text-center space-y-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-[#71717A] font-medium block">Round Trips</span>
+                <p className="text-lg font-bold text-[#C2410C]">{networkRoundTrips.length}</p>
+              </div>
+            </div>
+
+            {/* Compact detail columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Top suspicious accounts */}
+              <div className="border border-[#E4E4E7] rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-[#52525B] uppercase tracking-wider font-mono">
+                    Top Suspicious Accounts
+                  </span>
+                  <button
+                    onClick={() => openWholeNetwork('reports')}
+                    className="text-[10px] font-semibold text-[#2563EB] hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    View full analysis <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+                {networkSuspicious.length === 0 ? (
+                  <p className="text-[11px] text-[#71717A] font-light py-2">No suspicious accounts ranked yet.</p>
+                ) : (
+                  <ol className="space-y-1.5">
+                    {networkSuspicious.slice(0, 5).map((acct: any, idx: number) => {
+                      const name = acct?.account ?? acct?.node ?? 'Unknown';
+                      const level = acct?.risk_level || 'LOW';
+                      return (
+                        <li key={idx} className="flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-4 h-4 rounded bg-zinc-100 text-zinc-600 text-[9px] font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="font-mono font-semibold text-[#18181B] truncate max-w-[150px]" title={name}>
+                              {name}
+                            </span>
+                          </div>
+                          <span className={`text-[8.5px] uppercase font-bold font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                            level === 'CRITICAL' ? 'bg-red-100 text-red-800 border border-red-300' :
+                            level === 'HIGH' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            level === 'MEDIUM' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            'bg-green-50 text-green-700 border border-green-200'
+                          }`}>
+                            {level} · {Math.round((acct?.risk_score ?? 0) <= 1 ? (acct?.risk_score ?? 0) * 100 : (acct?.risk_score ?? 0))}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
+
+              {/* Round trip chains */}
+              <div className="border border-[#E4E4E7] rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-[#52525B] uppercase tracking-wider font-mono">
+                    Circular Round Trips ({networkRoundTrips.length})
+                  </span>
+                  <button
+                    onClick={() => openWholeNetwork('round-trips')}
+                    className="text-[10px] font-semibold text-[#2563EB] hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    View full analysis <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+                {networkRoundTrips.length === 0 ? (
+                  <p className="text-[11px] text-[#71717A] font-light py-2">No circular chains detected across the network.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {networkRoundTrips.slice(0, 5).map((trip: any, idx: number) => {
+                      const nodes = trip?.nodes || trip?.accounts || [];
+                      return (
+                        <li key={idx} className="flex items-center justify-between gap-2 text-xs bg-[#FAF9F6] border border-[#E4E4E7] rounded px-2 py-1.5">
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded shrink-0">
+                            #{trip?.id ?? idx + 1}
+                          </span>
+                          <span className="font-mono text-[9px] text-[#52525B] truncate flex-1" title={nodes.join(' → ')}>
+                            {nodes.length} hops · {nodes.join(' → ')}
+                          </span>
+                          <span className="font-mono font-bold text-[#C2410C] shrink-0">
+                            {formatINR(trip?.min_amount ?? trip?.total_amount ?? 0)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

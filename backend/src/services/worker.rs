@@ -22,7 +22,8 @@ const OCR: &str = "http://localhost:8001/extract";
 const STANDARDIZE: &str = "http://localhost:8002/standardize";
 const VALIDATE: &str = "http://localhost:8004/validate";
 const ENTITY: &str = "http://localhost:8003/resolve";
-const GRAPH_ANALYZE: &str = "http://localhost:8005/flow/analyze/all";
+// refresh=true forces a whole-network recompute (never serves a stale cache).
+const GRAPH_ANALYZE: &str = "http://localhost:8005/flow/analyze/all?refresh=true";
 
 pub async fn start_worker(mut receiver: Receiver<ProcessingJob>, db: PgPool) {
     let client = Client::new();
@@ -93,8 +94,14 @@ async fn process_job(
         serde_json::from_value(entity_resp["canonical_entities"].clone()).unwrap_or_default();
     save_entities(db, entities).await;
 
-    // 6. graph intelligence (DB-driven, whole network) — best-effort
+    // 6. graph intelligence (DB-driven, whole network) — best-effort.
+    // A new statement changes every whole-network aggregate, so drop all cached
+    // analysis first (graph analyze/risk + report all share `analysis_cache`);
+    // the refreshing call below then re-warms the analyze cache.
     update_job(db, job.job_id, "processing", 85, "graph", None).await;
+    if let Err(e) = crate::repositories::delete_repository::clear_analysis_cache(db).await {
+        println!("Cache invalidation failed (non-fatal): {:?}", e);
+    }
     match get(client, GRAPH_ANALYZE).await {
         Ok(g) => {
             let trips = g["round_trips"].as_array().map(|a| a.len()).unwrap_or(0);
