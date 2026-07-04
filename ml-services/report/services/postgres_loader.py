@@ -103,6 +103,22 @@ class PostgresLoader:
             [limit],
         )
 
+    def transactions_full(self, statement_id):
+        """Full ledger detail for a statement's transactions, keyed for the
+        money-trail bank report (date, time, narration, reference, dr/cr, balance)."""
+        if not statement_id:
+            return []
+        return _all(
+            """
+            SELECT t.id::text AS id, t.date::text AS date, t.time,
+                   t.narration, t.reference_number, t.debit_credit,
+                   t.amount, t.balance
+            FROM transactions t
+            WHERE t.statement_id = %s::uuid
+            """,
+            [statement_id],
+        )
+
     def all_statement_ids(self):
         rows = _all(
             """

@@ -155,56 +155,85 @@ def _statement_trails(sid):
     return data.get("trails", []) if isinstance(data, dict) else []
 
 
-def _money_trail_doc(case_id):
-    if case_id == "all":
-        sids = _loader.all_statement_ids()
-    else:
-        sids = [case_id]
+def _cash_loc(narration):
+    if is_cash_narration(narration):
+        p = parse_location(narration)
+        if p["location"]["city"] != "Unknown":
+            return f"{p['location']['city']}, {p['location']['state']}"
+    return ""
 
-    credit_rows = []
-    dispersion_rows = []
+
+def _ledger_row(label, txn, meta, is_credit):
+    """One bank-ledger row from full DB detail (falling back to trail meta)."""
+    date = txn.get("date") or meta.get("credit_date") or meta.get("date")
+    time = txn.get("time")
+    dt = f"{date or ''} {time or ''}".strip()
+    narr = txn.get("narration") or meta.get("narration") or ""
+    ref = txn.get("reference_number") or ""
+    dc = (txn.get("debit_credit") or "").upper()
+    amt = txn.get("amount")
+    debit = _money(amt) if dc == "DEBIT" else ""
+    credit = _money(amt) if dc == "CREDIT" else ""
+    if not debit and not credit:  # txn not in index -> use trail amount
+        m = meta.get("credit_amount") if is_credit else meta.get("amount")
+        if is_credit:
+            credit = _money(m)
+        else:
+            debit = _money(m)
+    bal = _money(txn.get("balance")) if txn.get("balance") is not None else ""
+    return [label, dt, date, narr, ref, debit, credit, bal, _cash_loc(narr)]
+
+
+def _money_trail_doc(case_id):
+    sids = _loader.all_statement_ids() if case_id == "all" else [case_id]
+
+    credit_rows, dispersion_rows, ledger_rows = [], [], []
     total_credit = 0.0
+    trail_no = 0
     for sid in sids:
-        for tr in _statement_trails(sid):
+        trails = _statement_trails(sid)
+        txn_index = {r["id"]: r for r in _loader.transactions_full(sid)}
+        for tr in trails:
+            trail_no += 1
             camt = tr.get("credit_amount", 0) or 0
             total_credit += camt
             credit_rows.append([
-                tr.get("credit_date"),
-                tr.get("source") or "Unresolved",
-                _money(camt),
-                _money(tr.get("spent")),
-                _money(tr.get("remaining")),
+                f"#{trail_no}", tr.get("credit_date"), tr.get("source") or "Unresolved",
+                _money(camt), _money(tr.get("spent")), _money(tr.get("remaining")),
                 "Yes" if tr.get("fully_traced") else "No",
             ])
+            # bank-ledger: the credit line, then each debit that consumed it
+            cid = str(tr.get("credit_txn_id") or "")
+            ledger_rows.append(_ledger_row(f"Credit #{trail_no}", txn_index.get(cid, {}), tr, True))
             for c in tr.get("consumed_by", []) or []:
-                loc = ""
                 narr = c.get("narration")
-                if is_cash_narration(narr):
-                    p = parse_location(narr)
-                    if p["location"]["city"] != "Unknown":
-                        loc = f"{p['location']['city']}, {p['location']['state']}"
                 dispersion_rows.append([
-                    tr.get("credit_date"),
-                    c.get("date"),
+                    f"#{trail_no}", c.get("date"),
                     c.get("destination") or (narr or "")[:40],
-                    _money(c.get("amount")),
-                    loc,
+                    _money(c.get("amount")), _cash_loc(narr),
                 ])
+                did = str(c.get("debit_txn_id") or "")
+                ledger_rows.append(_ledger_row(f"  -> #{trail_no}", txn_index.get(did, {}), c, False))
 
     return {
         "title": "Money-Trail (FIFO) Investigation Report",
         "scope": _scope_label(case_id),
         "generated_at": _now(),
         "subtitle": f"{len(credit_rows)} credit inflow(s) traced FIFO to their outflows. "
-                    f"Total credited: {_money(total_credit)}.",
+                    f"Total credited: {_money(total_credit)}. Prepared for onward bank investigation.",
         "sections": [
             {"heading": "Credit Inflows (traced)", "kind": "table",
-             "columns": ["Credit Date", "Source", "Credited", "Spent", "Remaining", "Fully Traced"],
-             "rows": credit_rows, "widths": [1.4, 3.0, 1.5, 1.5, 1.5, 1.1],
-             "right_cols": [2, 3, 4], "empty": "No credit inflows to trace in this scope."},
-            {"heading": "Dispersion Detail (where each credit went)", "kind": "table",
-             "columns": ["From Credit", "Debit Date", "Destination", "Amount", "Cash Location"],
-             "rows": dispersion_rows, "widths": [1.4, 1.4, 3.6, 1.4, 2.2],
+             "columns": ["Trail", "Credit Date", "Source", "Credited", "Spent", "Remaining", "Fully Traced"],
+             "rows": credit_rows, "widths": [0.7, 1.4, 2.8, 1.4, 1.4, 1.4, 1.1],
+             "right_cols": [3, 4, 5], "empty": "No credit inflows to trace in this scope."},
+            {"heading": "Full Transaction Ledger (for bank investigation)", "kind": "table",
+             "columns": ["Trail", "Date & Time", "Value Date", "Transaction Details",
+                         "Cheque/Ref No", "Debit", "Credit", "Balance", "Cash Location"],
+             "rows": ledger_rows, "widths": [1.0, 1.5, 1.1, 3.0, 1.3, 1.2, 1.2, 1.3, 1.5],
+             "right_cols": [5, 6, 7], "empty": "No ledger detail available."},
+            {"heading": "Dispersion Summary (where each credit went)", "kind": "table",
+             "columns": ["Trail", "Debit Date", "Destination", "Amount", "Cash Location"],
+             "rows": dispersion_rows, "widths": [0.8, 1.4, 3.6, 1.4, 2.2],
              "right_cols": [3], "empty": "No dispersion recorded."},
         ],
     }

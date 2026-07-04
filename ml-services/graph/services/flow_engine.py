@@ -27,6 +27,8 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from services.channel import channel_of
+
 _UPI_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]+@[A-Za-z][A-Za-z0-9]+")
 _NAME_AFTER_VPA = re.compile(
     r"@[A-Za-z0-9]+/([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,3})"
@@ -134,7 +136,7 @@ class MoneyFlowEngine:
             if src is None and dst is None:
                 self.unresolved += 1
             return
-        self._add_edge(src, dst, amount, txn.get("date"))
+        self._add_edge(src, dst, amount, txn.get("date"), channel_of(txn))
         # investigator detail: statement-holder identity + activity window
         holder_id = str(txn.get("account") or holder or "SELF").strip()
         self._set_identity(holder_id, txn)
@@ -197,7 +199,7 @@ class MoneyFlowEngine:
                 "first_seen": None, "last_seen": None,
             }
 
-    def _add_edge(self, src, dst, amount, date):
+    def _add_edge(self, src, dst, amount, date, channel="Other"):
         self._ensure_node(src)
         self._ensure_node(dst)
         key = (src, dst)
@@ -206,9 +208,13 @@ class MoneyFlowEngine:
             e = self.edges[key] = {
                 "source": src, "target": dst, "total_amount": 0.0,
                 "txn_count": 0, "first_date": date, "last_date": date,
+                "channels": {},
             }
         e["total_amount"] = round(e["total_amount"] + amount, 2)
         e["txn_count"] += 1
+        e["channels"][channel] = e["channels"].get(channel, 0) + 1
+        # dominant channel (most transactions on this route)
+        e["channel"] = max(e["channels"].items(), key=lambda kv: kv[1])[0]
         if date:
             if not e["first_date"] or str(date) < str(e["first_date"]):
                 e["first_date"] = date

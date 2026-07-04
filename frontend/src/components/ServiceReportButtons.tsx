@@ -24,6 +24,14 @@ export function ServiceReportButtons({
       </button>
       <button
         type="button"
+        onClick={() => downloadServiceReport(caseId, service, 'docx')}
+        className="px-2.5 py-1.5 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-[11px] font-semibold rounded-md flex items-center gap-1.5 cursor-pointer transition-colors"
+        title="Download this service's report (Word)"
+      >
+        <FileDown className="w-3 h-3 text-[#52525B]" /> Word
+      </button>
+      <button
+        type="button"
         onClick={() => downloadServiceReport(caseId, service, 'excel')}
         className="px-2.5 py-1.5 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-[11px] font-semibold rounded-md flex items-center gap-1.5 cursor-pointer transition-colors"
         title="Download this service's report (Excel)"

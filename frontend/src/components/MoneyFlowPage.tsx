@@ -5,6 +5,7 @@ import { getMoneyFlow, getRoundTrips, getTopRisks, getTimeline } from '../servic
 import { RiskBadges, Tag } from './RiskBadge';
 import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
 import { ServiceReportButtons } from './ServiceReportButtons';
+import { orderChannels } from '../services/channels';
 import { RoundTrip } from '../types/api';
 
 interface NetworkNode {
@@ -33,6 +34,8 @@ interface NetworkConnection {
   txn_count: number;
   first_date: string | null;
   last_date: string | null;
+  channel?: string;
+  channels?: Record<string, number>;
 }
 
 export default function MoneyFlowPage() {
@@ -72,6 +75,10 @@ export default function MoneyFlowPage() {
 
   // Amount-range filter on edge transfer amounts (also a declutter lever).
   const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
+
+  // Payment-channel container filter (UPI / PhonePe / NEFT / ...).
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
   // Pan / zoom / enlarge for exploring the whole network.
   const [zoom, setZoom] = useState(1);
@@ -267,7 +274,9 @@ export default function MoneyFlowPage() {
           amountStr: `₹${(edge.total_amount ?? 0).toLocaleString(undefined, {maximumFractionDigits:0})}`,
           txn_count: edge.txn_count ?? 1,
           first_date: edge.first_date || null,
-          last_date: edge.last_date || null
+          last_date: edge.last_date || null,
+          channel: edge.channel,
+          channels: edge.channels,
         };
       });
       setConnections(conns);
@@ -378,12 +387,20 @@ export default function MoneyFlowPage() {
     conn => conn.from === activeNodeId || conn.to === activeNodeId
   );
 
-  // Amount-range filter: an edge stays visible if it's in range (or is part of
-  // the highlighted round-trip cycle). Nodes with no visible edge hide.
-  const amountFilterActive = amountRange.min != null || amountRange.max != null;
+  // Amount-range + payment-channel filters: an edge stays visible if it's in
+  // range AND matches the selected channel (or is part of the highlighted cycle).
+  // Nodes with no visible edge hide.
+  const availableChannels = orderChannels(
+    connections.flatMap((c) => (c.channels ? Object.keys(c.channels) : (c.channel ? [c.channel] : [])))
+  );
+  const channelMatch = (conn: NetworkConnection) =>
+    !selectedChannel ||
+    (conn.channels ? (conn.channels[selectedChannel] || 0) > 0 : conn.channel === selectedChannel);
+  const filterActive =
+    amountRange.min != null || amountRange.max != null || selectedChannel != null;
   const isConnVisible = (conn: NetworkConnection) =>
-    inAmountRange(conn.amount, amountRange) ||
-    (tripActive && tripEdgeKeys.has(`${conn.from}->${conn.to}`));
+    (tripActive && tripEdgeKeys.has(`${conn.from}->${conn.to}`)) ||
+    (inAmountRange(conn.amount, amountRange) && channelMatch(conn));
   const visibleNodeIds = new Set<string>();
   connections.forEach((c) => {
     if (isConnVisible(c)) { visibleNodeIds.add(c.from); visibleNodeIds.add(c.to); }
@@ -544,6 +561,55 @@ export default function MoneyFlowPage() {
               </span>
               
               <div className="flex items-center gap-2">
+                {/* Payment-channel container filter */}
+                {availableChannels.length > 1 && (
+                  <div className={`relative ${isChannelDropdownOpen ? 'z-50' : 'z-30'}`}>
+                    {isChannelDropdownOpen && (
+                      <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)} />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
+                      className={`flex items-center justify-between gap-1.5 border rounded p-1 px-2.5 text-[10px] font-semibold cursor-pointer min-w-[130px] relative transition-all ${
+                        selectedChannel ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-[#FAF9F6] border-[#E4E4E7] hover:border-zinc-400 text-zinc-950'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] uppercase font-bold font-mono pr-1.5 border-r border-[#E4E4E7]">Channel</span>
+                        <span className="truncate max-w-[80px] font-medium">{selectedChannel || 'All'}</span>
+                      </div>
+                      <ChevronDown className="w-2.5 h-2.5 text-[#71717A] ml-0.5" />
+                    </button>
+                    {isChannelDropdownOpen && (
+                      <div className="absolute right-0 mt-1 w-52 bg-white border border-[#E4E4E7] rounded-lg shadow-md z-50 py-1 max-h-56 overflow-y-auto animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedChannel(null); setIsChannelDropdownOpen(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                            !selectedChannel ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                          }`}
+                        >
+                          <span>All Channels</span>
+                          {!selectedChannel && <Check className="w-3 h-3 text-zinc-800" />}
+                        </button>
+                        {availableChannels.map((ch) => (
+                          <button
+                            key={ch}
+                            type="button"
+                            onClick={() => { setSelectedChannel(ch); setIsChannelDropdownOpen(false); }}
+                            className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                              selectedChannel === ch ? 'bg-blue-50 font-bold text-blue-800' : 'text-zinc-700 font-light'
+                            }`}
+                          >
+                            <span>{ch}</span>
+                            {selectedChannel === ch && <Check className="w-3 h-3 text-blue-700" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Round-trip highlight selector — cycles integrated into the graph */}
                 {roundTrips.length > 0 && (
                   <div className={`relative ${isTripDropdownOpen ? 'z-50' : 'z-30'}`}>
@@ -788,8 +854,8 @@ export default function MoneyFlowPage() {
                     const startPos = nodes[conn.from];
                     const endPos = nodes[conn.to];
                     if (!startPos || !endPos) return null;
-                    // Amount-range filter (cycle edges always stay when highlighting).
-                    if (amountFilterActive && !isConnVisible(conn)) return null;
+                    // Amount + channel filters (cycle edges always stay when highlighting).
+                    if (filterActive && !isConnVisible(conn)) return null;
 
                     // When a round trip is selected, highlight ONLY its cycle
                     // edges; otherwise fall back to the selected-node highlight.
@@ -893,8 +959,8 @@ export default function MoneyFlowPage() {
 
                   {/* Draw Nodes */}
                   {Object.values(nodes).map((node) => {
-                    // Hide nodes whose every edge was filtered out by the ₹ range.
-                    if (amountFilterActive && !visibleNodeIds.has(node.id)) return null;
+                    // Hide nodes whose every edge was filtered out by the active filters.
+                    if (filterActive && !visibleNodeIds.has(node.id)) return null;
                     const isSelected = activeNodeId === node.id;
                     const isNodeOnCycle = tripActive && tripNodeSet.has(node.id);
                     // In round-trip mode, dim everything not on the cycle.

@@ -41,6 +41,9 @@ SELECT
     t.is_failed,
     t.date,
     t.time,
+    t.txn_type,
+    t.platform,
+    t.upi_id,
     t.statement_id
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id

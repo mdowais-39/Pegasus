@@ -23,6 +23,7 @@ import { useFinintelData } from '../context/FinintelDataContext';
 import { getStatementTransactions, getMoneyTrail } from '../services/finintelApi';
 import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
 import { ServiceReportButtons } from './ServiceReportButtons';
+import { channelOf, orderChannels } from '../services/channels';
 import { BackendTransaction, MoneyTrailResponse } from '../types/api';
 
 export default function MoneyTrailPage() {
@@ -38,6 +39,8 @@ export default function MoneyTrailPage() {
   const [isTxDropdownOpen, setIsTxDropdownOpen] = useState(false);
   const [txSearchQuery, setTxSearchQuery] = useState('');
   const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
 
   // Money Trail states
   const [trailData, setTrailData] = useState<MoneyTrailResponse['trail'] | null>(null);
@@ -118,9 +121,13 @@ export default function MoneyTrailPage() {
 
   const activeTx = creditTxns.find(t => t.id === selectedTxId);
 
-  // Credits matching both the search text and the amount-range filter.
+  // Channels present among the credit inflows, for the container dropdown.
+  const availableChannels = orderChannels(creditTxns.map((tx) => channelOf(tx)));
+
+  // Credits matching the search text, the amount-range and the channel filter.
   const filteredCredits = creditTxns.filter((tx) => {
     if (!inAmountRange(tx.amount, amountRange)) return false;
+    if (selectedChannel && channelOf(tx) !== selectedChannel) return false;
     const q = txSearchQuery.toLowerCase();
     return (
       (tx.date?.toLowerCase().includes(q)) ||
@@ -238,7 +245,48 @@ export default function MoneyTrailPage() {
             <div className="space-y-1.5">
               <span className="text-[9px] uppercase tracking-wider font-bold text-[#71717A] font-mono block">Select Credit to Trace</span>
               <p className="text-xs text-[#71717A] font-light">Chronological FIFO disperses from this chosen ledger deposit.</p>
-              <AmountRangeFilter value={amountRange} onChange={setAmountRange} label="Credit ₹" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <AmountRangeFilter value={amountRange} onChange={setAmountRange} label="Credit ₹" />
+                {availableChannels.length > 1 && (
+                  <div className={`relative ${isChannelDropdownOpen ? 'z-50' : 'z-20'}`}>
+                    {isChannelDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setIsChannelDropdownOpen(false)} />}
+                    <button
+                      type="button"
+                      onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
+                      className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-xs font-semibold cursor-pointer relative transition-all ${
+                        selectedChannel ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-white border-[#E4E4E7] hover:border-zinc-400 text-zinc-950'
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase font-bold text-[#71717A] font-mono pr-1.5 border-r border-[#E4E4E7]">Channel</span>
+                      <span className="font-medium">{selectedChannel || 'All'}</span>
+                      <ChevronDown className="w-3 h-3 text-[#71717A]" />
+                    </button>
+                    {isChannelDropdownOpen && (
+                      <div className="absolute left-0 mt-1 w-48 bg-white border border-[#E4E4E7] rounded-lg shadow-md z-50 py-1 max-h-56 overflow-y-auto animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedChannel(null); setIsChannelDropdownOpen(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-[#FAF9F6] ${!selectedChannel ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'}`}
+                        >
+                          <span>All Channels</span>
+                          {!selectedChannel && <Check className="w-3.5 h-3.5 text-zinc-800" />}
+                        </button>
+                        {availableChannels.map((ch) => (
+                          <button
+                            key={ch}
+                            type="button"
+                            onClick={() => { setSelectedChannel(ch); setIsChannelDropdownOpen(false); }}
+                            className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-[#FAF9F6] ${selectedChannel === ch ? 'bg-blue-50 font-bold text-blue-800' : 'text-zinc-700 font-light'}`}
+                          >
+                            <span>{ch}</span>
+                            {selectedChannel === ch && <Check className="w-3.5 h-3.5 text-blue-700" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Custom Searchable Select combobox */}
