@@ -152,6 +152,11 @@ export interface MoneyTrailResponse {
     consumed_by?: Array<{
       debit_txn_id?: string;
       amount?: number;
+      debit_total?: number;
+      leftover?: number;
+      time?: string | null;
+      reference_number?: string | null;
+      balance?: number | null;
       destination?: string;
       date?: string;
       narration?: string;

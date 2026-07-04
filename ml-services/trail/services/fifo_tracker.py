@@ -42,8 +42,11 @@ class FIFOTracker:
                 trail = {
                     "credit_txn_id": txn.get("txn_id") or txn.get("id"),
                     "credit_date": txn.get("date"),
+                    "credit_time": txn.get("time"),
                     "credit_amount": round(amount, 2),
                     "credit_narration": txn.get("narration"),
+                    "credit_reference": txn.get("reference_number"),
+                    "credit_balance": txn.get("balance"),
                     "source": resolve_counterparty(txn.get("narration")),
                     "consumed_by": [],
                     "spent": 0.0,
@@ -64,9 +67,14 @@ class FIFOTracker:
                     consumed = {
                         "debit_txn_id": txn.get("txn_id") or txn.get("id"),
                         "date": txn.get("date"),
-                        "amount": round(take, 2),
+                        "time": txn.get("time"),
+                        "amount": round(take, 2),          # portion traced to THIS credit
+                        "debit_total": round(amount, 2),   # full debit-transaction amount
+                        "leftover": round(amount - take, 2),  # rest of the debit (other sources)
                         "destination": dest,
                         "narration": txn.get("narration"),
+                        "reference_number": txn.get("reference_number"),
+                        "balance": txn.get("balance"),
                     }
                     # ATM / cash-out physical location, when this debit is a withdrawal
                     if is_cash_narration(txn.get("narration")):

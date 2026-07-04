@@ -24,6 +24,7 @@ SELECT
     t.debit_credit,
     t.amount,
     t.narration,
+    t.reference_number,
     t.balance,
     t.statement_id::text AS statement_id
 FROM transactions t
