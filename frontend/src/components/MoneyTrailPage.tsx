@@ -22,6 +22,7 @@ import {
 import { useFinintelData } from '../context/FinintelDataContext';
 import { getStatementTransactions, getMoneyTrail } from '../services/finintelApi';
 import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
+import { ServiceReportButtons } from './ServiceReportButtons';
 import { BackendTransaction, MoneyTrailResponse } from '../types/api';
 
 export default function MoneyTrailPage() {
@@ -157,9 +158,13 @@ export default function MoneyTrailPage() {
           </p>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap self-start">
+        {/* Per-service report export (scoped to the statement being traced) */}
+        <ServiceReportButtons caseId={selectedStmtId || caseId} service="money-trail" />
+
         {/* Custom Statement Selector Dropdown */}
         {completedStatements.length > 0 && (
-          <div className={`relative self-start shrink-0 ${isStmtDropdownOpen ? 'z-50' : 'z-30'}`}>
+          <div className={`relative shrink-0 ${isStmtDropdownOpen ? 'z-50' : 'z-30'}`}>
             {isStmtDropdownOpen && (
               <div className="fixed inset-0 z-40" onClick={() => setIsStmtDropdownOpen(false)} />
             )}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check, RefreshCw, X, Zap, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check, RefreshCw, X, Zap, MapPin, ZoomIn, ZoomOut, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
 import { getMoneyFlow, getRoundTrips, getTopRisks, getTimeline } from '../services/finintelApi';
 import { RiskBadges, Tag } from './RiskBadge';
 import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
+import { ServiceReportButtons } from './ServiceReportButtons';
 import { RoundTrip } from '../types/api';
 
 interface NetworkNode {
@@ -71,6 +72,47 @@ export default function MoneyFlowPage() {
 
   // Amount-range filter on edge transfer amounts (also a declutter lever).
   const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
+
+  // Pan / zoom / enlarge for exploring the whole network.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isEnlarged, setIsEnlarged] = useState(false);
+  const svgEl = useRef<SVGSVGElement | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  const wheelCleanup = useRef<(() => void) | null>(null);
+
+  const clampZoom = (z: number) => Math.max(0.4, Math.min(4, z));
+  const zoomBy = (f: number) => setZoom((z) => clampZoom(z * f));
+  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  const onCanvasMouseDown = (e: React.MouseEvent) => {
+    dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y };
+  };
+  const onCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current || !svgEl.current) return;
+    const rect = svgEl.current.getBoundingClientRect();
+    const scaleX = 900 / rect.width;
+    const scaleY = 400 / rect.height;
+    setPan({
+      x: dragRef.current.px + (e.clientX - dragRef.current.sx) * scaleX,
+      y: dragRef.current.py + (e.clientY - dragRef.current.sy) * scaleY,
+    });
+  };
+  const endDrag = () => { dragRef.current = null; };
+
+  // Non-passive wheel listener (low sensitivity), attached when the SVG mounts.
+  const svgRefCallback = useCallback((el: SVGSVGElement | null) => {
+    svgEl.current = el;
+    if (wheelCleanup.current) { wheelCleanup.current(); wheelCleanup.current = null; }
+    if (el) {
+      const onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        setZoom((z) => clampZoom(z * (e.deltaY < 0 ? 1.08 : 1 / 1.08)));
+      };
+      el.addEventListener('wheel', onWheel, { passive: false });
+      wheelCleanup.current = () => el.removeEventListener('wheel', onWheel);
+    }
+  }, []);
 
   const fetchFlow = useCallback(async () => {
     setIsLoading(true);
@@ -395,6 +437,9 @@ export default function MoneyFlowPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start">
+        {/* Per-service report export */}
+        <ServiceReportButtons caseId={caseId} service="money-flow" />
+
         {/* Amount range filter (also declutters dense graphs) */}
         <AmountRangeFilter value={amountRange} onChange={setAmountRange} />
 
@@ -611,8 +656,30 @@ export default function MoneyFlowPage() {
               </div>
             </div>
 
-            {/* Stable Canvas Board Wrapper */}
-            <div className="w-full h-[36rem] bg-[#FAF9F6] rounded-xl border border-[#E4E4E7] relative overflow-hidden select-none">
+            {/* Dim backdrop behind the enlarged canvas */}
+            {isEnlarged && <div className="fixed inset-0 bg-black/40 z-[94]" onClick={() => setIsEnlarged(false)} />}
+
+            {/* Stable Canvas Board Wrapper (enlarges to near-fullscreen) */}
+            <div className={isEnlarged
+              ? "fixed inset-3 z-[95] bg-[#FAF9F6] rounded-xl border border-[#E4E4E7] shadow-2xl overflow-hidden select-none"
+              : "w-full h-[36rem] bg-[#FAF9F6] rounded-xl border border-[#E4E4E7] relative overflow-hidden select-none"}>
+
+              {/* Pan / zoom / enlarge controls */}
+              <div className="absolute bottom-4 right-4 z-30 flex flex-col gap-1.5">
+                <button onClick={() => zoomBy(1.2)} title="Zoom in" className="w-7 h-7 bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md flex items-center justify-center text-[#52525B] shadow-xs cursor-pointer">
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => zoomBy(1 / 1.2)} title="Zoom out" className="w-7 h-7 bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md flex items-center justify-center text-[#52525B] shadow-xs cursor-pointer">
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={resetView} title="Reset view" className="w-7 h-7 bg-white border border-[#E4E4E7] hover:border-[#18181B] rounded-md flex items-center justify-center text-[#52525B] shadow-xs cursor-pointer">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setIsEnlarged((v) => !v)} title={isEnlarged ? 'Exit fullscreen' : 'Enlarge'} className="w-7 h-7 bg-[#18181B] hover:bg-black border border-[#18181B] rounded-md flex items-center justify-center text-white shadow-xs cursor-pointer">
+                  {isEnlarged ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
               {/* Overlay warning for hidden nodes */}
               {!showAllNodes && hiddenCount > 0 && !tripActive && (
                 <div className="absolute top-4 right-4 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 text-[10px] text-amber-800 font-mono shadow-sm z-30">
@@ -637,8 +704,17 @@ export default function MoneyFlowPage() {
                 </div>
               )}
 
-              {/* Stable SVG Canvas Board */}
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 900 400" preserveAspectRatio="xMidYMid meet">
+              {/* Stable SVG Canvas Board (pannable / zoomable) */}
+              <svg
+                ref={svgRefCallback}
+                onMouseDown={onCanvasMouseDown}
+                onMouseMove={onCanvasMouseMove}
+                onMouseUp={endDrag}
+                onMouseLeave={endDrag}
+                className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+                viewBox="0 0 900 400"
+                preserveAspectRatio="xMidYMid meet"
+              >
                 <defs>
                   {/* Connection line arrowheads (normal scale) */}
                   <marker
@@ -694,7 +770,7 @@ export default function MoneyFlowPage() {
                   </radialGradient>
                 </defs>
 
-                <g>
+                <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
                   {/* Dynamic path animations */}
                   <style>{`
                     @keyframes flowingPath {

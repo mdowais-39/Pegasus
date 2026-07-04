@@ -2,7 +2,7 @@ use axum::{
     body::Body,
     extract::{Path, State},
     http::header,
-    response::Response,
+    response::{IntoResponse, Response},
     Json,
 };
 use serde_json::{json, Value};
@@ -95,6 +95,38 @@ pub async fn report_pdf(
     Path(case_id): Path<String>,
 ) -> Result<Response, AppError> {
     download(&state, &case_id, "pdf").await
+}
+
+/// GET /api/v1/reports/{case_id}/service/{service}/{fmt}
+/// Per-service investigation report (round-trips | money-flow | money-trail).
+/// `fmt = json` returns the enveloped data; pdf/excel/docx stream the file.
+pub async fn service_report(
+    State(state): State<AppState>,
+    Path((case_id, service, fmt)): Path<(String, String, String)>,
+) -> Result<Response, AppError> {
+    if fmt == "json" {
+        let url = format!(
+            "{}/report/{}/service/{}/json",
+            state.services.report, case_id, service
+        );
+        let data = get_json(&state.http_client, &url).await?;
+        return Ok(ApiResponse::success(data).into_response());
+    }
+
+    let url = format!(
+        "{}/report/{}/service/{}/{}",
+        state.services.report, case_id, service, fmt
+    );
+    let (content_type, disposition, bytes) = fetch_bytes(&state.http_client, &url).await?;
+    let mut builder = Response::builder()
+        .status(200)
+        .header(header::CONTENT_TYPE, content_type);
+    if let Some(d) = disposition {
+        builder = builder.header(header::CONTENT_DISPOSITION, d);
+    }
+    builder
+        .body(Body::from(bytes))
+        .map_err(|e| AppError::Internal(format!("response build error: {}", e)))
 }
 
 /// POST /api/v1/reports/{case_id}/email

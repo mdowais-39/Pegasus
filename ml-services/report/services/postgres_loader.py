@@ -103,6 +103,17 @@ class PostgresLoader:
             [limit],
         )
 
+    def all_statement_ids(self):
+        rows = _all(
+            """
+            SELECT DISTINCT t.statement_id::text AS sid
+            FROM transactions t
+            WHERE t.is_valid = true
+              AND (t.is_duplicate = false OR t.is_duplicate IS NULL)
+            """
+        )
+        return [r["sid"] for r in rows if r.get("sid")]
+
     def cash_transactions(self, statement_id=None, limit=200):
         """ATM / cash-marked transactions (narration + amount + date/time) so the
         report builder can attach a physical withdrawal/deposit location."""

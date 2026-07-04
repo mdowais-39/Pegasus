@@ -4,6 +4,7 @@ import { useFinintelData } from '../context/FinintelDataContext';
 import { getRoundTrips, getRoundTripExplanation } from '../services/finintelApi';
 import { RiskBadges } from './RiskBadge';
 import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
+import { ServiceReportButtons } from './ServiceReportButtons';
 import { RoundTrip } from '../types/api';
 
 const getAdjustedPoints = (p1: { x: number; y: number }, p2: { x: number; y: number }, offset = 35) => {
@@ -152,6 +153,9 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start">
+        {/* Per-service report export */}
+        <ServiceReportButtons caseId={caseId} service="round-trips" />
+
         {/* Amount range filter */}
         <AmountRangeFilter value={amountRange} onChange={setAmountRange} />
 

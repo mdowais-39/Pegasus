@@ -15,6 +15,7 @@ from services.report_builder import ReportBuilder
 from services.excel_report import build_excel
 from services.docx_report import build_docx
 from services import email_service
+from services import service_reports, generic_render
 
 app = FastAPI()
 builder = ReportBuilder()
@@ -70,6 +71,35 @@ def report_docx(case_id: str, refresh: bool = False):
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         f"investigation_report_{case_id}.docx",
     )
+
+
+@app.get("/report/{case_id}/service/{service}/{fmt}")
+def service_report(case_id: str, service: str, fmt: str):
+    """Per-service investigation report (round-trips | money-flow | money-trail)
+    in json / pdf / excel / docx, scoped to a statement or the whole network."""
+    if service not in service_reports.SERVICES:
+        return JSONResponse(status_code=404,
+                            content={"error": f"unknown service '{service}'"})
+    doc = service_reports.build_service_doc(service, case_id)
+    fmt = (fmt or "json").lower()
+    tag = service.replace("-", "_")
+
+    if fmt == "json":
+        return JSONResponse(doc)
+    if fmt in ("excel", "xlsx"):
+        return _download(generic_render.render_excel(doc),
+                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                         f"{tag}_report_{case_id}.xlsx")
+    if fmt in ("docx", "word"):
+        return _download(generic_render.render_docx(doc),
+                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                         f"{tag}_report_{case_id}.docx")
+    try:
+        return _download(generic_render.render_pdf(doc), "application/pdf",
+                         f"{tag}_report_{case_id}.pdf")
+    except ImportError:
+        return JSONResponse(status_code=501,
+                            content={"error": "reportlab not installed. Run: pip install reportlab"})
 
 
 @app.get("/report/{case_id}/pdf")
