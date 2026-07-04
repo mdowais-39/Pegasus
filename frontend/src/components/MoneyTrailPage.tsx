@@ -208,6 +208,7 @@ export default function MoneyTrailPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {isLoadingTxns ? (
