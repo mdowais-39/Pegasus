@@ -19,22 +19,27 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from services import tags as _tags
+from services.passthrough import compute_passthrough
+
 
 # weight per signal; renormalized over whichever signals are present
 WEIGHTS = {
     "round_trip": 0.22,
-    "layering": 0.18,
-    "accumulation": 0.15,
-    "fan_in": 0.10,
-    "fan_out": 0.10,
-    "anomaly": 0.10,
-    "temporal": 0.08,
-    "failed_ratio": 0.04,
+    "rapid_passthrough": 0.16,
+    "layering": 0.16,
+    "accumulation": 0.13,
+    "fan_in": 0.09,
+    "fan_out": 0.09,
+    "anomaly": 0.09,
+    "temporal": 0.07,
+    "failed_ratio": 0.03,
     "centrality": 0.03,
 }
 
 _EXPLAIN = {
     "round_trip": "Participates in circular/round-trip money movement",
+    "rapid_passthrough": "Funds are moved out almost as fast as they arrive (rapid pass-through)",
     "layering": "Money passes through almost unchanged (layering/mule pattern)",
     "accumulation": "Concentrates large incoming funds (accumulation point)",
     "fan_in": "Receives from many distinct senders (collection)",
@@ -77,6 +82,9 @@ class RiskFusionEngine:
                 rt_count[n] += 1
         max_rt = max(rt_count.values(), default=0)
 
+        # rapid pass-through (money in -> out fast) per holder account
+        passthrough_map = compute_passthrough(rows or [])
+
         # per-account transaction stats (holder perspective)
         txn_stats = self._txn_stats(rows or [])
         max_vol = max((s["volume"] for s in txn_stats.values()), default=0)
@@ -96,15 +104,16 @@ class RiskFusionEngine:
             in_deg = len(engine.in_adj.get(nid, ()))
             out_deg = len(engine.out_adj.get(nid, ()))
             ti, to = node["total_in"], node["total_out"]
-            passthrough = 0.0
+            passthrough_ratio = 0.0
             if ti > 0 and to > 0:
-                passthrough = 1 - abs(ti - to) / max(ti, to)
+                passthrough_ratio = 1 - abs(ti - to) / max(ti, to)
             stats = txn_stats.get(nid, {})
 
             signals = {
                 "round_trip": _norm(rt_count.get(nid, 0), max(1, max_rt))
                 if nid in rt_count else 0.0,
-                "layering": passthrough,
+                "rapid_passthrough": passthrough_map.get(nid, {}).get("score", 0.0),
+                "layering": passthrough_ratio,
                 "accumulation": _norm(ti, max_in),
                 "fan_in": _norm(in_deg, max_send),
                 "fan_out": _norm(out_deg, max_recv),
@@ -116,9 +125,12 @@ class RiskFusionEngine:
                 "volume": _norm(stats.get("volume", 0), max_vol),
                 "velocity": _norm(stats.get("count", 0), max_cnt),
             }
-            results.append(self._fuse(nid, node, signals,
-                                      has_temporal=bool(temporal_map),
-                                      has_anomaly=bool(anomaly_map)))
+            res = self._fuse(nid, node, signals,
+                             has_temporal=bool(temporal_map),
+                             has_anomaly=bool(anomaly_map))
+            if nid in passthrough_map:
+                res["passthrough"] = passthrough_map[nid]
+            results.append(res)
 
         results.sort(key=lambda r: r["risk_score"], reverse=True)
         return results
@@ -152,7 +164,7 @@ class RiskFusionEngine:
 
         factors.sort(key=lambda f: f["contribution"], reverse=True)
         score = round(min(100.0, score), 2)
-        return {
+        result = {
             "node": nid,
             "type": node["type"],
             "risk_score": score,
@@ -161,6 +173,9 @@ class RiskFusionEngine:
             "top_reasons": [f["explanation"] for f in factors[:3]],
             "signals": {k: round(v, 3) for k, v in signals.items()},
         }
+        # Investigator-facing tags (plain-language flags) derived from factors.
+        result.update(_tags.derive_tags(result))
+        return result
 
     def _evidence(self, sig, node, signals):
         if sig == "accumulation":

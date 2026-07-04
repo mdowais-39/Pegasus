@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check, RefreshCw, X } from 'lucide-react';
+import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check, RefreshCw, X, Zap, MapPin } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
-import { getMoneyFlow, getRoundTrips } from '../services/finintelApi';
+import { getMoneyFlow, getRoundTrips, getTopRisks, getTimeline } from '../services/finintelApi';
+import { RiskBadges, Tag } from './RiskBadge';
+import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
 import { RoundTrip } from '../types/api';
 
 interface NetworkNode {
@@ -13,6 +15,11 @@ interface NetworkNode {
   amountStr: string;
   desc: string;
   notes: string;
+  holderName?: string | null;
+  bank?: string | null;
+  ifsc?: string | null;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
   x: number;
   y: number;
 }
@@ -49,6 +56,21 @@ export default function MoneyFlowPage() {
   const [roundTrips, setRoundTrips] = useState<RoundTrip[]>([]);
   const [selectedTripIdx, setSelectedTripIdx] = useState<number | null>(null);
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
+
+  // Per-account risk flags (tags + level + pass-through velocity), correlated
+  // onto graph nodes so the detail panel can show plain-language flags + gauge.
+  const [riskByNode, setRiskByNode] = useState<Record<string, {
+    risk_level: string;
+    tags: Tag[];
+    passthrough?: { avg_latency_min: number | null; fast_ratio: number } | null;
+  }>>({});
+
+  // Chronological transaction ledger for the selected node (lazy per-node).
+  const [nodeTimeline, setNodeTimeline] = useState<any[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+
+  // Amount-range filter on edge transfer amounts (also a declutter lever).
+  const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
 
   const fetchFlow = useCallback(async () => {
     setIsLoading(true);
@@ -96,7 +118,12 @@ export default function MoneyFlowPage() {
           totalOut,
           amountStr: formattedAmt,
           desc: `Ledger account node acting as a ${role} conduit. Extracted in-flow volume is ₹${totalIn.toLocaleString()} and out-flow is ₹${totalOut.toLocaleString()}.`,
-          notes: node.is_accumulation ? 'Identified accumulation sink point.' : `Active ${role} transit router.`
+          notes: node.is_accumulation ? 'Identified accumulation sink point.' : `Active ${role} transit router.`,
+          holderName: node.holder_name ?? null,
+          bank: node.bank ?? null,
+          ifsc: node.ifsc ?? null,
+          firstSeen: node.first_seen ?? null,
+          lastSeen: node.last_seen ?? null,
         };
       });
 
@@ -234,6 +261,25 @@ export default function MoneyFlowPage() {
     return () => { cancelled = true; };
   }, [caseId]);
 
+  // Risk flags per account, for the node-detail badges.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await getTopRisks(caseId, 100);
+        const map: Record<string, { risk_level: string; tags: Tag[]; passthrough?: any }> = {};
+        for (const r of resp?.top_risks || []) {
+          const id = r.node ?? r.account;
+          if (id != null) map[id] = { risk_level: r.risk_level, tags: r.tags || [], passthrough: r.passthrough };
+        }
+        if (!cancelled) setRiskByNode(map);
+      } catch {
+        if (!cancelled) setRiskByNode({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [caseId]);
+
   const selectedTrip = selectedTripIdx != null ? roundTrips[selectedTripIdx] : null;
   const tripNodeList: string[] = selectedTrip ? (selectedTrip.nodes || selectedTrip.accounts || []) : [];
   const tripNodeSet = new Set(tripNodeList);
@@ -255,6 +301,24 @@ export default function MoneyFlowPage() {
     }
   };
 
+  // Fetch the chronological ledger for whichever node is selected.
+  useEffect(() => {
+    if (!activeNodeId) { setNodeTimeline([]); return; }
+    let cancelled = false;
+    setIsLoadingTimeline(true);
+    (async () => {
+      try {
+        const resp = await getTimeline(caseId, activeNodeId);
+        if (!cancelled) setNodeTimeline(resp?.timeline || []);
+      } catch {
+        if (!cancelled) setNodeTimeline([]);
+      } finally {
+        if (!cancelled) setIsLoadingTimeline(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeNodeId, caseId]);
+
   const currentNode = nodes[activeNodeId] || Object.values(nodes)[0] || null;
 
   // Connected nodes highlighting logic
@@ -272,12 +336,38 @@ export default function MoneyFlowPage() {
     conn => conn.from === activeNodeId || conn.to === activeNodeId
   );
 
+  // Amount-range filter: an edge stays visible if it's in range (or is part of
+  // the highlighted round-trip cycle). Nodes with no visible edge hide.
+  const amountFilterActive = amountRange.min != null || amountRange.max != null;
+  const isConnVisible = (conn: NetworkConnection) =>
+    inAmountRange(conn.amount, amountRange) ||
+    (tripActive && tripEdgeKeys.has(`${conn.from}->${conn.to}`));
+  const visibleNodeIds = new Set<string>();
+  connections.forEach((c) => {
+    if (isConnVisible(c)) { visibleNodeIds.add(c.from); visibleNodeIds.add(c.to); }
+  });
+  if (activeNodeId) visibleNodeIds.add(activeNodeId);
+  tripNodeSet.forEach((n) => visibleNodeIds.add(n));
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0
     }).format(val);
+  };
+
+  // "01 Apr → 12 Apr (11d)" activity window for an account.
+  const activeWindow = (first?: string | null, last?: string | null) => {
+    if (!first && !last) return '—';
+    const f = first || last!;
+    const l = last || first!;
+    const fmt = (d: string) => {
+      const dt = new Date(d);
+      return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    };
+    const days = Math.max(0, Math.round((new Date(l).getTime() - new Date(f).getTime()) / 86400000));
+    return `${fmt(f)} → ${fmt(l)} (${days}d)`;
   };
 
   const N = Object.keys(nodes).length;
@@ -304,8 +394,12 @@ export default function MoneyFlowPage() {
           </p>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap self-start">
+        {/* Amount range filter (also declutters dense graphs) */}
+        <AmountRangeFilter value={amountRange} onChange={setAmountRange} />
+
         {/* Custom Case Scope Dropdown */}
-        <div className={`relative self-start shrink-0 ${isScopeDropdownOpen ? 'z-50' : 'z-30'}`}>
+        <div className={`relative shrink-0 ${isScopeDropdownOpen ? 'z-50' : 'z-30'}`}>
           {isScopeDropdownOpen && (
             <div className="fixed inset-0 z-40" onClick={() => setIsScopeDropdownOpen(false)} />
           )}
@@ -358,6 +452,7 @@ export default function MoneyFlowPage() {
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -617,6 +712,8 @@ export default function MoneyFlowPage() {
                     const startPos = nodes[conn.from];
                     const endPos = nodes[conn.to];
                     if (!startPos || !endPos) return null;
+                    // Amount-range filter (cycle edges always stay when highlighting).
+                    if (amountFilterActive && !isConnVisible(conn)) return null;
 
                     // When a round trip is selected, highlight ONLY its cycle
                     // edges; otherwise fall back to the selected-node highlight.
@@ -720,6 +817,8 @@ export default function MoneyFlowPage() {
 
                   {/* Draw Nodes */}
                   {Object.values(nodes).map((node) => {
+                    // Hide nodes whose every edge was filtered out by the ₹ range.
+                    if (amountFilterActive && !visibleNodeIds.has(node.id)) return null;
                     const isSelected = activeNodeId === node.id;
                     const isNodeOnCycle = tripActive && tripNodeSet.has(node.id);
                     // In round-trip mode, dim everything not on the cycle.
@@ -875,10 +974,86 @@ export default function MoneyFlowPage() {
                       {currentNode.id}
                     </p>
                   </div>
-                  
+
+                  {/* Malicious-activity flags for this account */}
+                  {(() => {
+                    const risk = riskByNode[currentNode.id];
+                    if (!risk || (risk.tags?.length ?? 0) === 0) return null;
+                    return (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[9px] uppercase font-bold font-mono px-2 py-0.5 rounded border ${
+                          risk.risk_level === 'CRITICAL' ? 'bg-red-100 text-red-800 border-red-300' :
+                          risk.risk_level === 'HIGH' ? 'bg-red-50 text-red-700 border-red-200' :
+                          risk.risk_level === 'MEDIUM' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-green-50 text-green-700 border-green-200'
+                        }`}>
+                          {risk.risk_level} Risk
+                        </span>
+                        <RiskBadges tags={risk.tags} size="xs" />
+                      </div>
+                    );
+                  })()}
+
+                  {/* Fund velocity gauge (rapid pass-through) — reuses the app's progress-bar look */}
+                  {(() => {
+                    const pt = riskByNode[currentNode.id]?.passthrough;
+                    if (!pt) return null;
+                    const ratio = Math.max(0, Math.min(1, pt.fast_ratio ?? 0));
+                    const label = pt.avg_latency_min != null
+                      ? (pt.avg_latency_min < 60 ? `~${Math.round(pt.avg_latency_min)} min` : `~${(pt.avg_latency_min / 60).toFixed(1)} hr`)
+                      : 'same-day';
+                    return (
+                      <div className="bg-white border border-[#E4E4E7] rounded-lg p-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-[#18181B] flex items-center gap-1 font-mono uppercase tracking-wider">
+                            <Zap className="w-2.5 h-2.5 text-[#DC2626]" /> Fund Velocity
+                          </span>
+                          <span className="text-[10px] text-red-700 font-mono font-bold">{label}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-[#F4F4F5] overflow-hidden relative">
+                          <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg,#16A34A,#D97706,#DC2626)', opacity: 0.25 }} />
+                          <div className="absolute left-0 top-0 bottom-0 rounded-full bg-[#DC2626]" style={{ width: `${Math.round(ratio * 100)}%` }} />
+                        </div>
+                        <div className="flex justify-between text-[8px] text-[#A1A1AA] font-mono uppercase tracking-wider">
+                          <span>Slow (safe)</span><span>Instant (suspicious)</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <p className="text-xs text-[#52525B] leading-relaxed font-sans font-light">
                     {currentNode.desc}
                   </p>
+
+                  {/* Investigator identity + activity window */}
+                  {(currentNode.holderName || currentNode.bank || currentNode.ifsc || currentNode.firstSeen || currentNode.lastSeen) && (
+                    <div className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-2.5 grid grid-cols-1 gap-1 text-[10px] font-mono">
+                      {currentNode.holderName && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[#71717A] uppercase tracking-wider">Holder</span>
+                          <span className="font-bold text-[#18181B] truncate max-w-[170px]" title={currentNode.holderName}>{currentNode.holderName}</span>
+                        </div>
+                      )}
+                      {currentNode.bank && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[#71717A] uppercase tracking-wider">Bank</span>
+                          <span className="font-bold text-[#18181B] truncate max-w-[170px]" title={currentNode.bank}>{currentNode.bank}</span>
+                        </div>
+                      )}
+                      {currentNode.ifsc && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[#71717A] uppercase tracking-wider">IFSC</span>
+                          <span className="font-bold text-[#18181B]">{currentNode.ifsc}</span>
+                        </div>
+                      )}
+                      {(currentNode.firstSeen || currentNode.lastSeen) && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[#71717A] uppercase tracking-wider">Active</span>
+                          <span className="font-bold text-[#18181B]">{activeWindow(currentNode.firstSeen, currentNode.lastSeen)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* financial aggregate figures */}
@@ -980,6 +1155,52 @@ export default function MoneyFlowPage() {
                       <p className="text-[11px] text-[#71717A] font-light text-center py-6">
                         No direct ledger connections mapped to this node.
                       </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chronological transaction ledger (time-ordered) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#F4F4F5] pb-1.5">
+                    <span className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider font-mono">
+                      Transaction Ledger
+                    </span>
+                    <span className="text-[9px] text-[#71717A] font-mono">
+                      {isLoadingTimeline ? 'loading…' : `${nodeTimeline.length} entries`}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-[16rem] overflow-y-auto pr-1">
+                    {nodeTimeline.length === 0 && !isLoadingTimeline ? (
+                      <p className="text-[11px] text-[#71717A] font-light text-center py-4">
+                        No per-transaction ledger available for this node.
+                      </p>
+                    ) : (
+                      nodeTimeline.map((ev, i) => {
+                        const isCredit = (ev.direction || '').toUpperCase() === 'CREDIT';
+                        return (
+                          <div key={i} className="bg-[#FAF9F6] border border-[#E4E4E7] rounded-lg p-2 text-[10px] space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[#52525B] flex items-center gap-1">
+                                <Calendar className="w-2.5 h-2.5" />
+                                {ev.date || 'N/A'}{ev.time ? ` · ${ev.time}` : ''}
+                              </span>
+                              <span className={`font-mono font-bold ${isCredit ? 'text-emerald-700' : 'text-[#C2410C]'}`}>
+                                {isCredit ? '+' : '−'}{formatCurrency(Math.abs(Number(ev.amount) || 0))}
+                              </span>
+                            </div>
+                            {(ev.counterparty || ev.narration) && (
+                              <p className="text-[#71717A] font-light font-sans truncate" title={ev.narration || ev.counterparty || ''}>
+                                {ev.counterparty ? `${ev.counterparty} · ` : ''}{ev.narration || ''}
+                              </p>
+                            )}
+                            {ev.location && (
+                              <p className="text-[#DC2626] font-bold font-mono flex items-center gap-1">
+                                <MapPin className="w-2.5 h-2.5 shrink-0" /> {ev.location.city}, {ev.location.state}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

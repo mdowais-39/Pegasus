@@ -71,6 +71,7 @@ export interface ValidationReport {
 export interface BackendTransaction {
   id: string;
   date: string | null;
+  time?: string | null;
   sender_account: string | null;
   receiver_account: string | null;
   amount: number | null;
@@ -98,6 +99,11 @@ export interface MoneyFlowResponse {
     total_in?: number;
     total_out?: number;
     is_accumulation?: boolean;
+    holder_name?: string | null;
+    bank?: string | null;
+    ifsc?: string | null;
+    first_seen?: string | null;
+    last_seen?: string | null;
     [key: string]: any;
   }>;
   edges: Array<{
@@ -149,6 +155,7 @@ export interface MoneyTrailResponse {
       destination?: string;
       date?: string;
       narration?: string;
+      location?: { city: string; state: string; country: string } | null;
       [key: string]: any;
     }>;
     [key: string]: any;

@@ -273,6 +273,15 @@ def _engine_from_rows(rows):
     return MoneyFlowEngine().build(rows)
 
 
+def _rows_for_node(node_id):
+    """Load the transactions behind a money-flow node. Single-account holders are
+    exposed as `STMT:<uuid>` when they have no account number, so look those up
+    by statement id; everything else resolves by account/counterparty."""
+    if node_id and node_id.startswith("STMT:"):
+        return _loader.load_statement_transactions(node_id[5:])
+    return _loader.load_account_transactions(node_id)
+
+
 def _full_result(eng):
     return {
         "summary": fa.money_flow_summary(eng),
@@ -444,6 +453,7 @@ def _representative_top_risks(per_statement: int = 3, refresh: bool = False):
                 promoted["risk_level"] = r["risk_level"]
                 promoted["factors"] = r.get("factors", cur.get("factors"))
                 promoted["top_reasons"] = r.get("top_reasons", cur.get("top_reasons"))
+                promoted["tags"] = r.get("tags", cur.get("tags"))
                 promoted["source_statement"] = sid
                 by_node[node] = promoted
             else:
@@ -527,14 +537,14 @@ def investigation_top_suspicious_representative(limit: int = 20,
 
 @app.get("/investigation/counterparties/{account}")
 def investigation_counterparties(account: str):
-    rows = _loader.load_account_transactions(account)
+    rows = _rows_for_node(account)
     eng = _engine_from_rows(rows)
     return inv.counterparty_analysis(eng, account)
 
 
 @app.get("/investigation/timeline/{account}")
 def investigation_timeline(account: str):
-    rows = _loader.load_account_transactions(account)
+    rows = _rows_for_node(account)
     return {"account": account, "count": len(rows),
             "timeline": inv.timeline(rows)}
 

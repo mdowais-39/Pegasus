@@ -121,6 +121,22 @@ def build_pdf(report: dict) -> bytes:
     flow.append(make_table(["Metric", "Value"], es_rows, [3, 2], right_cols=(1,)))
     flow.append(Spacer(1, 8))
 
+    # --------------------------------------------------- flagged findings (top)
+    flagged = report.get("flagged_findings", [])
+    flow.append(Paragraph("Malicious Activity — Flagged Findings", h2))
+    flow.append(Paragraph(report.get("flags_summary", ""), body))
+    flow.append(Spacer(1, 3))
+    if flagged:
+        flow.append(make_table(
+            ["Account", "Severity", "Flags", "Evidence"],
+            [[f.get("account"), f.get("severity"),
+              ", ".join(f.get("tags", []) or []),
+              "; ".join(f.get("reasons", []) or [])]
+             for f in flagged[:20]],
+            [2.4, 1.1, 2.5, 4.0],
+        ))
+    flow.append(Spacer(1, 8))
+
     # ------------------------------------------------------- risk distribution
     dist = report.get("risk_distribution") or _risk_distribution(report.get("top_risks", []))
     if dist:
@@ -150,11 +166,12 @@ def build_pdf(report: dict) -> bytes:
     # --------------------------------------------------------- top suspicious
     flow.append(Paragraph("Top Suspicious Accounts", h2))
     flow.append(make_table(
-        ["Account", "Score", "Level", "Patterns"],
+        ["Account", "Score", "Level", "Flags", "Patterns"],
         [[r.get("node") or r.get("account"), r.get("risk_score"), r.get("risk_level"),
+          ", ".join(t.get("label", "") for t in (r.get("tags") or [])),
           "; ".join(r.get("patterns", []) or r.get("top_reasons", []) or [])]
          for r in report.get("top_risks", [])[:15]],
-        [2.6, 0.9, 1.1, 4.4], right_cols=(1,),
+        [2.2, 0.8, 1.0, 2.6, 3.4], right_cols=(1,),
     ))
     flow.append(Spacer(1, 8))
 
@@ -199,6 +216,20 @@ def build_pdf(report: dict) -> bytes:
               f"{round((a.get('passthrough_ratio') or 0) * 100)}%"]
              for a in lay],
             [4, 2, 2, 1.6], right_cols=(1, 2, 3),
+        ))
+        flow.append(Spacer(1, 8))
+
+    # ------------------------------------------------------- cash locations
+    cash = report.get("cash_locations", [])[:30]
+    if cash:
+        flow.append(Paragraph("Cash Withdrawal / Deposit Locations", h2))
+        flow.append(make_table(
+            ["City", "State", "Direction", "Amount", "Date / Time"],
+            [[c.get("city"), c.get("state"), c.get("direction"),
+              _inr(c.get("amount")),
+              f"{c.get('date') or ''} {c.get('time') or ''}".strip()]
+             for c in cash],
+            [2.2, 2.4, 1.2, 1.6, 2.6], right_cols=(3,),
         ))
         flow.append(Spacer(1, 8))
 

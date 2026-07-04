@@ -6,6 +6,8 @@ class ValidatedTransaction(BaseModel):
 
     date: Optional[str] = None
 
+    time: Optional[str] = None
+
     amount: Optional[float] = None
 
     txn_type: Optional[str] = None

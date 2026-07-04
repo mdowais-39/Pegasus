@@ -110,7 +110,68 @@ async fn process_job(
         Err(e) => println!("Graph trigger failed (non-fatal): {}", e),
     }
 
+    // 7. raise investigator alerts for serious findings (best-effort)
+    generate_alerts(client, db, job.statement_id).await;
+
     Ok(())
+}
+
+// Balanced-sensitivity alerting: HIGH/CRITICAL accounts + any round-trip in this
+// statement. Best-effort — an alerting hiccup never fails the ingestion job.
+const GRAPH_BASE: &str = "http://localhost:8005";
+
+async fn generate_alerts(client: &Client, db: &PgPool, statement_id: uuid::Uuid) {
+    use crate::repositories::alert_repository::insert_alert;
+
+    // account-level HIGH/CRITICAL alerts
+    let risk_url = format!("{}/risk/top/statement/{}?limit=20", GRAPH_BASE, statement_id);
+    if let Ok(v) = get(client, &risk_url).await {
+        if let Some(arr) = v["top_risks"].as_array() {
+            for r in arr {
+                let level = r["risk_level"].as_str().unwrap_or("LOW");
+                if level != "HIGH" && level != "CRITICAL" {
+                    continue;
+                }
+                let account = r["node"].as_str().or_else(|| r["account"].as_str());
+                let category = r["tags"]
+                    .as_array()
+                    .and_then(|t| t.first())
+                    .and_then(|t| t["key"].as_str())
+                    .unwrap_or(if level == "CRITICAL" { "MALICIOUS" } else { "HIGH_RISK" });
+                let reasons: Vec<String> = r["top_reasons"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                let title = format!("{} risk account: {}", level, account.unwrap_or("unknown"));
+                let detail = reasons.join("; ");
+                if let Err(e) =
+                    insert_alert(db, statement_id, account, level, category, &title, &detail).await
+                {
+                    println!("alert insert failed (non-fatal): {:?}", e);
+                }
+            }
+        }
+    }
+
+    // one summary alert if the statement contains circular money flow
+    let flow_url = format!("{}/flow/analyze/statement/{}", GRAPH_BASE, statement_id);
+    if let Ok(v) = get(client, &flow_url).await {
+        if let Some(rt) = v["round_trips"].as_array() {
+            if !rt.is_empty() {
+                let title = format!("Circular money flow detected ({} chain(s))", rt.len());
+                let _ = insert_alert(
+                    db,
+                    statement_id,
+                    None,
+                    "HIGH",
+                    "CIRCULAR",
+                    &title,
+                    "Round-trip / circular transfers found in this statement.",
+                )
+                .await;
+            }
+        }
+    }
 }
 
 async fn post(client: &Client, url: &str, body: &Value) -> Result<Value, String> {

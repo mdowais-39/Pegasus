@@ -57,6 +57,10 @@ pub async fn delete_statement_cascade(
         .bind(id)
         .execute(&mut *tx)
         .await?;
+    sqlx::query("DELETE FROM alerts WHERE statement_id = $1::uuid")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("DELETE FROM jobs WHERE statement_id = $1::uuid")
         .bind(id)
         .execute(&mut *tx)
@@ -106,6 +110,7 @@ pub async fn clear_all(db: &PgPool) -> Result<(i64, i64, i64), AppError> {
     let mut tx = db.begin().await?;
     // children first (FK order), then parents, then independent caches
     sqlx::query("DELETE FROM transactions").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM alerts").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM jobs").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM risk_profiles").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM entities").execute(&mut *tx).await?;

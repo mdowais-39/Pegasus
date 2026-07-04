@@ -10,6 +10,7 @@ import os
 import urllib.request
 
 from services.postgres_loader import PostgresLoader
+from services.location_parser import parse_location
 from services import persistence
 
 GRAPH_URL = os.getenv("GRAPH_URL", "http://localhost:8005")
@@ -41,6 +42,7 @@ class ReportBuilder:
         counts = self.loader.summary_counts(stmt)
         validation = self.loader.validation_summary(stmt)
         entities = self.loader.top_entities(25)
+        cash_locations = self._cash_locations(stmt)
 
         # Risk + flow must follow the SAME scope as the counts above:
         #  - scoped: this statement's transactions only.
@@ -68,6 +70,8 @@ class ReportBuilder:
             "generated_at": datetime.datetime.now(datetime.timezone.utc)
                             .strftime("%Y-%m-%d %H:%M UTC"),
             "risk_distribution": self._risk_distribution(top_risks),
+            "flagged_findings": self._flagged_findings(top_risks),
+            "flags_summary": self._flags_summary(self._flagged_findings(top_risks)),
             "executive_summary": {
                 "statements": counts.get("statements", 0),
                 "transactions": counts.get("transactions", 0),
@@ -93,11 +97,61 @@ class ReportBuilder:
             "round_trips": round_trips[:25],
             "top_risks": top_risks,
             "top_entities": entities,
+            "cash_locations": cash_locations,
             "validation": validation,
             "recommendations": self._recommendations(mf, round_trips, top_risks, validation),
         }
         persistence.save(case_id, "report", report)
         return report
+
+    def _cash_locations(self, statement_id):
+        """Physical ATM / cash withdrawal & deposit sites (city, state) — the
+        leads list for officers. Parsed deterministically from narrations."""
+        out = []
+        for r in self.loader.cash_transactions(statement_id):
+            parsed = parse_location(r.get("narration"))
+            loc = parsed["location"]
+            if loc["city"] == "Unknown":
+                continue
+            out.append({
+                "city": loc["city"],
+                "state": loc["state"],
+                "amount": float(r.get("amount") or 0),
+                "date": r.get("date"),
+                "time": r.get("time") if r.get("time")
+                        else (parsed["time"] if parsed["time"] != "Unknown" else None),
+                "direction": r.get("debit_credit"),
+                "narration": r.get("narration"),
+            })
+        return out
+
+    def _flagged_findings(self, top_risks):
+        """HIGH/CRITICAL accounts distilled into investigator-facing findings —
+        severity, plain-language flags, evidence and source statement."""
+        out = []
+        for r in top_risks or []:
+            level = r.get("risk_level")
+            if level not in ("HIGH", "CRITICAL"):
+                continue
+            pt = r.get("passthrough") or {}
+            out.append({
+                "account": r.get("node") or r.get("account"),
+                "severity": level,
+                "risk_score": r.get("risk_score"),
+                "tags": [t.get("label") for t in (r.get("tags") or [])],
+                "reasons": r.get("top_reasons") or [],
+                "passthrough_latency_min": pt.get("avg_latency_min"),
+                "source_statement": r.get("source_statement"),
+            })
+        return out
+
+    def _flags_summary(self, flagged):
+        if not flagged:
+            return "No accounts flagged for malicious activity."
+        crit = sum(1 for f in flagged if f["severity"] == "CRITICAL")
+        high = sum(1 for f in flagged if f["severity"] == "HIGH")
+        return (f"{len(flagged)} account(s) flagged for malicious activity "
+                f"({crit} critical, {high} high).")
 
     def _risk_distribution(self, top_risks):
         dist = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}

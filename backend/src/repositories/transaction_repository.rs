@@ -53,7 +53,9 @@ pub async fn insert_transaction(
     confidence_score,
     validation_notes,
 
-    raw_row
+    raw_row,
+
+    time
 )
 
         VALUES (
@@ -62,7 +64,7 @@ pub async fn insert_transaction(
             $7,$8,$9,$10,$11,
             $12,$13,
             $14,$15,$16,$17,$18,
-            $19, $20, $21
+            $19, $20, $21, $22
 
         )
         "#
@@ -135,6 +137,8 @@ pub async fn insert_transaction(
     )
 
     .bind(raw_row)
+
+    .bind(&txn.time)
 
     .execute(pool)
     .await?;

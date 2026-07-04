@@ -108,7 +108,7 @@ pub async fn list_transactions(
 ) -> Result<Vec<Value>, AppError> {
     let rows = sqlx::query(
         r#"
-        SELECT id::text AS id, date::text AS date,
+        SELECT id::text AS id, date::text AS date, time,
                sender_account, receiver_account,
                amount::float8 AS amount, txn_type, upi_id,
                narration, narration_normalized,
@@ -119,7 +119,7 @@ pub async fn list_transactions(
                validation_notes::text AS validation_notes
         FROM transactions
         WHERE statement_id = $1::uuid
-        ORDER BY date NULLS LAST, created_at
+        ORDER BY date NULLS LAST, time NULLS LAST, created_at
         LIMIT $2 OFFSET $3
         "#,
     )
@@ -136,6 +136,7 @@ fn txn_row_to_json(row: &sqlx::postgres::PgRow) -> Value {
     json!({
         "id": row.get::<String, _>("id"),
         "date": row.get::<Option<String>, _>("date"),
+        "time": row.get::<Option<String>, _>("time"),
         "sender_account": row.get::<Option<String>, _>("sender_account"),
         "receiver_account": row.get::<Option<String>, _>("receiver_account"),
         "amount": row.get::<Option<f64>, _>("amount"),

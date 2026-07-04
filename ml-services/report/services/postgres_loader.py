@@ -102,3 +102,28 @@ class PostgresLoader:
             """,
             [limit],
         )
+
+    def cash_transactions(self, statement_id=None, limit=200):
+        """ATM / cash-marked transactions (narration + amount + date/time) so the
+        report builder can attach a physical withdrawal/deposit location."""
+        clauses = [
+            "t.is_valid = true",
+            "(t.is_duplicate = false OR t.is_duplicate IS NULL)",
+            "(upper(t.narration) LIKE '%%ATM%%' OR upper(t.narration) LIKE '%%CASH%%'"
+            " OR upper(t.narration) LIKE '%%WDL%%' OR upper(t.narration) LIKE '%%NFS%%')",
+        ]
+        params = []
+        if statement_id:
+            clauses.append("t.statement_id = %s::uuid")
+            params.append(statement_id)
+        where = " AND ".join(clauses)
+        return _all(
+            f"""
+            SELECT t.date::text AS date, t.time, t.amount, t.debit_credit, t.narration
+            FROM transactions t
+            WHERE {where}
+            ORDER BY t.date NULLS LAST, t.time NULLS LAST
+            LIMIT {int(limit)}
+            """,
+            params,
+        )

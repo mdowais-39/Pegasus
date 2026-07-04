@@ -1,4 +1,5 @@
 pub mod health_handler;
+pub mod alert_handler;
 pub mod statement_handler;
 pub mod job_handler;
 pub mod entity_handler;

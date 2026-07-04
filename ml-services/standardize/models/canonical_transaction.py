@@ -6,6 +6,8 @@ class CanonicalTransaction(BaseModel):
 
     date: Optional[str] = None
 
+    time: Optional[str] = None
+
     narration: Optional[str] = None
 
     transaction_id: Optional[str] = None

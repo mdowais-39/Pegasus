@@ -7,6 +7,7 @@ chronological timeline.
 from __future__ import annotations
 
 from services.flow_engine import resolve_counterparty
+from services.location_parser import parse_location, is_cash_narration
 
 
 def top_suspicious(scored_risks, limit=20, account_only=False):
@@ -21,6 +22,7 @@ def top_suspicious(scored_risks, limit=20, account_only=False):
             "risk_score": r["risk_score"],
             "risk_level": r["risk_level"],
             "patterns": r["top_reasons"],
+            "tags": r.get("tags", []),
         })
         if len(out) >= limit:
             break
@@ -55,12 +57,20 @@ def timeline(rows, limit=500):
     """Chronological transaction events for an account (already date-ordered)."""
     events = []
     for r in rows[:limit]:
-        events.append({
+        narration = r.get("narration")
+        event = {
             "date": r.get("date"),
+            "time": r.get("time"),
             "direction": r.get("debit_credit"),
             "amount": r.get("amount"),
             "balance": r.get("balance"),
-            "counterparty": resolve_counterparty(r.get("narration")),
-            "narration": r.get("narration"),
-        })
+            "counterparty": resolve_counterparty(narration),
+            "narration": narration,
+        }
+        # Physical location for ATM / cash movements (officer can go there).
+        if is_cash_narration(narration):
+            loc = parse_location(narration)
+            if loc["location"]["city"] != "Unknown":
+                event["location"] = loc["location"]
+        events.append(event)
     return events

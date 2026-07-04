@@ -4,6 +4,7 @@ use axum::{
 };
 
 use crate::handlers::{
+    alert_handler::{ack_alert, alerts_count, list_alerts},
     docs_handler::{openapi, swagger_ui},
     entity_handler::{get_entity, get_entity_aliases, list_entities},
     investigation_handler::{
@@ -61,6 +62,10 @@ pub fn api_routes() -> Router<AppState> {
         )
         .route("/api/v1/investigations/{case_id}/top-risks", get(top_risks))
         .route("/api/v1/investigations/{case_id}/counterparties", get(counterparties))
+        // ---- alerts ----
+        .route("/api/v1/alerts", get(list_alerts))
+        .route("/api/v1/alerts/count", get(alerts_count))
+        .route("/api/v1/alerts/{id}/ack", post(ack_alert))
         // ---- cases + reports ----
         .route("/api/v1/cases/{case_id}/summary", get(case_summary))
         .route("/api/v1/reports/{case_id}/json", get(report_json))

@@ -17,6 +17,7 @@ amount, narration, balance.
 """
 
 from services.counterparty import resolve as resolve_counterparty
+from services.location_parser import parse_location, is_cash_narration
 
 
 def _direction(txn):
@@ -60,13 +61,19 @@ class FIFOTracker:
                     lot = open_lots[0]
                     take = min(remaining_debit, lot["remaining"])
                     trail = trails[lot["i"]]
-                    trail["consumed_by"].append({
+                    consumed = {
                         "debit_txn_id": txn.get("txn_id") or txn.get("id"),
                         "date": txn.get("date"),
                         "amount": round(take, 2),
                         "destination": dest,
                         "narration": txn.get("narration"),
-                    })
+                    }
+                    # ATM / cash-out physical location, when this debit is a withdrawal
+                    if is_cash_narration(txn.get("narration")):
+                        loc = parse_location(txn.get("narration"))
+                        if loc["location"]["city"] != "Unknown":
+                            consumed["location"] = loc["location"]
+                    trail["consumed_by"].append(consumed)
                     trail["spent"] = round(trail["spent"] + take, 2)
                     trail["remaining"] = round(trail["remaining"] - take, 2)
                     lot["remaining"] -= take

@@ -135,6 +135,34 @@ class MoneyFlowEngine:
                 self.unresolved += 1
             return
         self._add_edge(src, dst, amount, txn.get("date"))
+        # investigator detail: statement-holder identity + activity window
+        holder_id = str(txn.get("account") or holder or "SELF").strip()
+        self._set_identity(holder_id, txn)
+        self._touch_dates(src, txn.get("date"))
+        self._touch_dates(dst, txn.get("date"))
+
+    def _set_identity(self, node_id, txn):
+        n = self.nodes.get(node_id)
+        if not n:
+            return
+        if not n.get("holder_name") and txn.get("account_holder"):
+            n["holder_name"] = txn.get("account_holder")
+        if not n.get("bank") and txn.get("holder_bank"):
+            n["bank"] = txn.get("holder_bank")
+        if not n.get("ifsc") and txn.get("ifsc_code"):
+            n["ifsc"] = txn.get("ifsc_code")
+
+    def _touch_dates(self, node_id, date):
+        if not date:
+            return
+        n = self.nodes.get(node_id)
+        if not n:
+            return
+        d = str(date)
+        if not n.get("first_seen") or d < n["first_seen"]:
+            n["first_seen"] = d
+        if not n.get("last_seen") or d > n["last_seen"]:
+            n["last_seen"] = d
 
     def _resolve(self, txn, holder, direction):
         sender = (txn.get("sender_account") or "").strip() \
@@ -165,6 +193,8 @@ class MoneyFlowEngine:
                 "id": node_id, "type": _classify(node_id),
                 "total_in": 0.0, "total_out": 0.0,
                 "in_count": 0, "out_count": 0,
+                "holder_name": None, "bank": None, "ifsc": None,
+                "first_seen": None, "last_seen": None,
             }
 
     def _add_edge(self, src, dst, amount, date):

@@ -40,6 +40,19 @@ def build_docx(report: dict) -> bytes:
     _heading(doc, "Executive Summary")
     _kv_table(doc, report.get("executive_summary", {}))
 
+    _heading(doc, "Malicious Activity — Flagged Findings")
+    doc.add_paragraph(report.get("flags_summary", ""))
+    flagged = report.get("flagged_findings", [])
+    if flagged:
+        _table(
+            doc,
+            ["Account", "Severity", "Flags", "Evidence"],
+            [[f.get("account"), f.get("severity"),
+              ", ".join(f.get("tags", []) or []),
+              "; ".join(f.get("reasons", []) or [])]
+             for f in flagged[:20]],
+        )
+
     dist = report.get("risk_distribution")
     if dist:
         _heading(doc, "Risk Distribution", level=2)
@@ -65,10 +78,11 @@ def build_docx(report: dict) -> bytes:
     _heading(doc, "Top Suspicious Accounts")
     _table(
         doc,
-        ["Account", "Risk", "Level", "Patterns"],
+        ["Account", "Risk", "Level", "Flags", "Patterns"],
         [
             [r.get("node") or r.get("account"), r.get("risk_score"),
              r.get("risk_level"),
+             ", ".join(t.get("label", "") for t in (r.get("tags") or [])),
              "; ".join(r.get("patterns", []) or r.get("top_reasons", []) or [])]
             for r in report.get("top_risks", [])[:15]
         ],
@@ -104,6 +118,17 @@ def build_docx(report: dict) -> bytes:
             [[a.get("node"), a.get("total_in"), a.get("total_out"),
               f"{round((a.get('passthrough_ratio') or 0) * 100)}%"]
              for a in lay],
+        )
+
+    cash = report.get("cash_locations", [])[:40]
+    if cash:
+        _heading(doc, "Cash Withdrawal / Deposit Locations")
+        _table(
+            doc,
+            ["City", "State", "Direction", "Amount", "Date", "Time"],
+            [[c.get("city"), c.get("state"), c.get("direction"),
+              c.get("amount"), c.get("date"), c.get("time")]
+             for c in cash],
         )
 
     entities = report.get("top_entities", [])[:20]

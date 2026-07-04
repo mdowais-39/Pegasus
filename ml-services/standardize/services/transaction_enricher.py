@@ -42,6 +42,7 @@ class TransactionEnricher:
 
         return StandardizedTransaction(
             date=self.date_norm.normalize(txn.date),
+            time=txn.time,
             amount=amount,
             txn_type=txn_type,
             reference_number=txn.transaction_id,

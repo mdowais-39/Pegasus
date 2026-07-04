@@ -22,6 +22,7 @@ _NUMERIC_FIELDS = {"debit": False, "credit": False, "amount": False,
 # resolver canonical field -> CanonicalTransaction model field
 RESOLVER_TO_MODEL = {
     "date": "date",
+    "time": "time",
     "narration": "narration",
     "ref_no": "transaction_id",
     "debit": "debit",

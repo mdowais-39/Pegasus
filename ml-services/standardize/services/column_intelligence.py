@@ -70,6 +70,12 @@ SYNONYMS: dict[str, dict[str, list[str]]] = {
         "strong": ["value date", "post date", "effective date"],
         "weak": [],
     },
+    "time": {   # transaction time-of-day (when the statement provides it)
+        "exact": ["time", "txn time", "tran time", "transaction time",
+                  "posting time", "value time", "time stamp", "timestamp"],
+        "strong": ["txn time", "tran time", "transaction time", "posting time"],
+        "weak": ["time"],
+    },
     "narration": {
         "exact": ["narration", "description", "particulars", "tran particular",
                   "transaction details", "transaction particulars",

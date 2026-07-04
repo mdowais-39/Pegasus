@@ -198,6 +198,12 @@ def graph_payload(engine):
             "out_count": n["out_count"],
             "is_accumulation": n["id"] in accumulation_ids,
             "is_source": n["id"] in source_ids,
+            # investigator detail (identity + activity window)
+            "holder_name": n.get("holder_name"),
+            "bank": n.get("bank"),
+            "ifsc": n.get("ifsc"),
+            "first_seen": n.get("first_seen"),
+            "last_seen": n.get("last_seen"),
         })
     edges = list(engine.edges.values())
     return {"nodes": nodes, "edges": edges}

@@ -56,6 +56,23 @@ def build_excel(report: dict) -> bytes:
             r += 1
     _autosize(ws)
 
+    # --- Flagged Findings ---
+    flagged = report.get("flagged_findings", [])
+    ws = _sheet(wb, "Flagged Findings")
+    ws["A1"] = report.get("flags_summary", "")
+    ws["A1"].font = _TITLE_FONT
+    _header_row(ws, ["Account", "Severity", "Risk Score", "Flags", "Evidence", "Source Statement"], row=3)
+    r = 4
+    for f in flagged:
+        ws.cell(row=r, column=1, value=f.get("account"))
+        ws.cell(row=r, column=2, value=f.get("severity"))
+        ws.cell(row=r, column=3, value=f.get("risk_score"))
+        ws.cell(row=r, column=4, value=", ".join(f.get("tags", []) or []))
+        ws.cell(row=r, column=5, value="; ".join(f.get("reasons", []) or []))
+        ws.cell(row=r, column=6, value=f.get("source_statement"))
+        r += 1
+    _autosize(ws)
+
     # --- Validation ---
     val = report.get("validation") or {}
     if val:
@@ -69,12 +86,13 @@ def build_excel(report: dict) -> bytes:
 
     # --- Top Risks ---
     ws = _sheet(wb, "Top Risks")
-    _header_row(ws, ["Account", "Risk Score", "Risk Level", "Patterns"])
+    _header_row(ws, ["Account", "Risk Score", "Risk Level", "Flags", "Patterns"])
     for r in report.get("top_risks", []):
         ws.append([
             r.get("node") or r.get("account"),
             r.get("risk_score"),
             r.get("risk_level"),
+            ", ".join(t.get("label", "") for t in (r.get("tags") or [])),
             "; ".join(r.get("patterns", []) or r.get("top_reasons", []) or []),
         ])
     _autosize(ws)
@@ -114,6 +132,16 @@ def build_excel(report: dict) -> bytes:
         ws.append([a.get("node"), a.get("total_in"), a.get("total_out"),
                    round((a.get("passthrough_ratio") or 0) * 100)])
     _autosize(ws)
+
+    # --- Cash Locations ---
+    cash = report.get("cash_locations", [])
+    if cash:
+        ws = _sheet(wb, "Cash Locations")
+        _header_row(ws, ["City", "State", "Direction", "Amount", "Date", "Time", "Narration"])
+        for c in cash:
+            ws.append([c.get("city"), c.get("state"), c.get("direction"),
+                       c.get("amount"), c.get("date"), c.get("time"), c.get("narration")])
+        _autosize(ws)
 
     # --- Entities ---
     ws = _sheet(wb, "Entities")

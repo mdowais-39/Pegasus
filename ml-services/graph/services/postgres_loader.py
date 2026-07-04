@@ -28,6 +28,9 @@ def _conn():
 _BASE = """
 SELECT
     COALESCE(s.account_number, 'STMT:' || t.statement_id::text) AS account,
+    s.account_holder,
+    s.bank_name AS holder_bank,
+    s.ifsc_code,
     t.sender_account,
     t.receiver_account,
     t.amount,
@@ -37,6 +40,7 @@ SELECT
     t.reference_number,
     t.is_failed,
     t.date,
+    t.time,
     t.statement_id
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id
@@ -67,11 +71,11 @@ def _clean(r):
 class PostgresLoader:
 
     def load_all_transactions(self):
-        return _rows(_BASE + " ORDER BY t.date NULLS LAST, t.created_at")
+        return _rows(_BASE + " ORDER BY t.date NULLS LAST, t.time NULLS LAST, t.created_at")
 
     def load_statement_transactions(self, statement_id):
         return _rows(
-            _BASE + " AND t.statement_id = %s ORDER BY t.date NULLS LAST, t.created_at",
+            _BASE + " AND t.statement_id = %s ORDER BY t.date NULLS LAST, t.time NULLS LAST, t.created_at",
             [statement_id],
         )
 
@@ -80,7 +84,7 @@ class PostgresLoader:
             _BASE + """ AND (s.account_number = %s
                             OR t.sender_account = %s
                             OR t.receiver_account = %s)
-                       ORDER BY t.date NULLS LAST, t.created_at""",
+                       ORDER BY t.date NULLS LAST, t.time NULLS LAST, t.created_at""",
             [account, account, account],
         )
 

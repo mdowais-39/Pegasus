@@ -17,7 +17,8 @@ import {
   Loader2,
   Mail,
   X,
-  Send
+  Send,
+  MapPin
 } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
 import {
@@ -29,6 +30,7 @@ import {
 } from '../services/finintelApi';
 import { downloadReport } from '../services/downloads';
 import { getSession } from '../services/auth';
+import { RiskBadges } from './RiskBadge';
 import { RoundTrip } from '../types/api';
 
 export default function ReportsPage() {
@@ -374,7 +376,21 @@ export default function ReportsPage() {
       ) : (
         /* Primary Report Dashboard Layout */
         <div className="space-y-6">
-          
+
+          {/* Malicious-activity flags roll-up (top-of-report) */}
+          {reportJson?.flags_summary && (
+            <div className={`p-3 rounded-lg border text-xs font-bold flex items-center gap-2 ${
+              (reportJson.flagged_findings?.length ?? 0) > 0
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]'
+            }`}>
+              {(reportJson.flagged_findings?.length ?? 0) > 0
+                ? <ShieldAlert className="w-4 h-4 shrink-0" />
+                : <CheckCircle className="w-4 h-4 shrink-0" />}
+              <span>{reportJson.flags_summary}</span>
+            </div>
+          )}
+
           {/* Executive Case Brief Summary */}
           <div className="bg-white border border-[#E4E4E7] p-5 rounded-xl space-y-2">
             <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono flex justify-between items-center">
@@ -518,6 +534,11 @@ export default function ReportsPage() {
                           </div>
                         </div>
 
+                        {/* Malicious-activity flags */}
+                        {Array.isArray(acct?.tags) && acct.tags.length > 0 && (
+                          <RiskBadges tags={acct.tags} size="xs" />
+                        )}
+
                         {/* Source Statement IDs */}
                         {Array.isArray(acct?.statement_ids) && acct.statement_ids.length > 0 && (
                           <div className="border-t border-b border-[#F4F4F5] py-2 flex flex-wrap items-center gap-1.5">
@@ -649,9 +670,12 @@ export default function ReportsPage() {
                         className="p-3 border border-[#E4E4E7] rounded-lg bg-[#FAF9F6] space-y-2 text-xs"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded">
-                            Cycle #{trip?.id || idx + 1}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded">
+                              Cycle #{trip?.id ?? idx + 1}
+                            </span>
+                            <RiskBadges tags={[{ key: 'CIRCULAR', label: 'Circular Money Flow' }]} size="xs" />
+                          </div>
                           <span className="font-bold text-[#C2410C] font-mono">
                             {formatCurrency(trip?.min_amount || trip?.total_amount || 0)}
                           </span>
@@ -692,6 +716,45 @@ export default function ReportsPage() {
             </div>
 
           </div>
+
+          {/* Cash Withdrawal / Deposit Locations — physical leads for officers */}
+          {Array.isArray(reportJson?.cash_locations) && reportJson.cash_locations.length > 0 && (
+            <div className="space-y-3 font-sans">
+              <h2 className="text-xs font-bold text-[#18181B] uppercase tracking-wider border-b border-[#E4E4E7] pb-2 font-mono flex items-center gap-2">
+                <MapPin className="w-3.5 h-3.5 text-[#DC2626]" /> Cash Withdrawal / Deposit Locations
+              </h2>
+              <div className="overflow-hidden border border-[#E4E4E7] rounded-xl text-xs">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-[#FAF9F6] border-b border-[#E4E4E7] text-[10px] uppercase font-bold text-[#71717A] font-mono">
+                      <th className="p-3 pl-4">City</th>
+                      <th className="p-3">State</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Date / Time</th>
+                      <th className="p-3 text-right pr-4">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E4E4E7] bg-white">
+                    {reportJson.cash_locations.slice(0, 50).map((c: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-[#FAFAFA]">
+                        <td className="p-3 pl-4 font-bold text-[#18181B] flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-[#DC2626] shrink-0" />{c.city}
+                        </td>
+                        <td className="p-3 text-[#52525B]">{c.state}</td>
+                        <td className="p-3">
+                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${c.direction === 'DEBIT' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                            {c.direction === 'DEBIT' ? 'Withdrawal' : 'Deposit'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-mono text-[10px] text-[#71717A]">{c.date || 'N/A'}{c.time ? ` · ${c.time}` : ''}</td>
+                        <td className="p-3 text-right font-bold pr-4 text-[#18181B] font-mono">{formatCurrency(c.amount || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Module 4: Suspicious Raw Transactions Log */}
           <div className="space-y-3 font-sans">

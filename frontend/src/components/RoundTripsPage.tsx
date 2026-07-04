@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, ArrowRight, ShieldAlert, CheckCircle, Clock, AlertTriangle, Loader2, ChevronDown, Check } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
 import { getRoundTrips, getRoundTripExplanation } from '../services/finintelApi';
+import { RiskBadges } from './RiskBadge';
+import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
 import { RoundTrip } from '../types/api';
 
 const getAdjustedPoints = (p1: { x: number; y: number }, p2: { x: number; y: number }, offset = 35) => {
@@ -34,6 +36,7 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false);
+  const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
 
   const fetchTrips = useCallback(async () => {
     setIsLoading(true);
@@ -97,6 +100,12 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
     fetchTrips();
   }, [fetchTrips]);
 
+  // When the amount filter changes, snap the selection back to the first match.
+  useEffect(() => {
+    setActiveTab(0);
+    setExplanation(null);
+  }, [amountRange.min, amountRange.max]);
+
   const handleTabSelect = (idx: number, trip: RoundTrip) => {
     setActiveTab(idx);
     fetchExplanation(idx, trip);
@@ -118,7 +127,12 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
     return formatCurrency(n);
   };
 
-  const currentTrip = roundTrips[activeTab];
+  // Amount-range filter on circulated volume (total, falling back to bottleneck).
+  const filteredTrips = roundTrips.filter((t) =>
+    inAmountRange(t.total_amount ?? t.totalAmount ?? t.min_amount ?? 0, amountRange)
+  );
+
+  const currentTrip = filteredTrips[activeTab];
   const currentFlow = currentTrip ? (currentTrip.accounts || currentTrip.nodes || []) : [];
 
   return (
@@ -137,8 +151,12 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
           </p>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap self-start">
+        {/* Amount range filter */}
+        <AmountRangeFilter value={amountRange} onChange={setAmountRange} />
+
         {/* Custom Case Scope Dropdown */}
-        <div className={`relative self-start shrink-0 ${isScopeDropdownOpen ? 'z-50' : 'z-30'}`}>
+        <div className={`relative shrink-0 ${isScopeDropdownOpen ? 'z-50' : 'z-30'}`}>
           {isScopeDropdownOpen && (
             <div className="fixed inset-0 z-40" onClick={() => setIsScopeDropdownOpen(false)} />
           )}
@@ -192,6 +210,7 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {isLoading ? (
@@ -230,11 +249,16 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
           {/* Left Side: Loop Selectors */}
           <div className="md:col-span-4 space-y-3">
             <span className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider block font-mono">
-              Cycle Directory
+              Cycle Directory ({filteredTrips.length}{filteredTrips.length !== roundTrips.length ? ` of ${roundTrips.length}` : ''})
             </span>
 
+            {filteredTrips.length === 0 ? (
+              <p className="text-[11px] text-[#71717A] font-light py-6 text-center border border-dashed border-[#E4E4E7] rounded-lg">
+                No round trips in this amount range.
+              </p>
+            ) : (
             <div className="space-y-2.5 max-h-[38rem] overflow-y-auto pr-1">
-              {roundTrips.map((trip, idx) => {
+              {filteredTrips.map((trip, idx) => {
                 const isSelected = activeTab === idx;
                 const tripId = trip.id !== undefined ? `Round Trip #${trip.id}` : `Round Trip #${idx + 1}`;
                 const amountVal = trip.total_amount ?? trip.totalAmount ?? trip.min_amount ?? 0;
@@ -276,6 +300,7 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Right Side: Visual Graph & Details */}
@@ -522,9 +547,12 @@ export default function RoundTripsPage({ onNavigateToView }: { onNavigateToView?
             <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F4F4F5] pb-3">
                 <div>
-                  <span className="text-[10px] text-[#E11D48] bg-[#FFF1F2] border border-[#FFE4E6] px-2 py-0.5 rounded font-semibold uppercase tracking-wider font-mono">
-                    Reason Flagged
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-[#E11D48] bg-[#FFF1F2] border border-[#FFE4E6] px-2 py-0.5 rounded font-semibold uppercase tracking-wider font-mono">
+                      Reason Flagged
+                    </span>
+                    <RiskBadges tags={[{ key: 'CIRCULAR', label: 'Circular Money Flow' }]} size="xs" />
+                  </div>
                   <h3 className="text-xs font-bold text-[#18181B] mt-2 font-sans">Analytical Ledger Disclosures</h3>
                 </div>
                 

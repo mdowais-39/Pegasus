@@ -11,15 +11,17 @@ import {
   Search, 
   Check, 
   ChevronDown, 
-  Calendar, 
-  User, 
-  Hash, 
-  Globe, 
-  Tag, 
-  Layers
+  Calendar,
+  User,
+  Hash,
+  Globe,
+  Tag,
+  Layers,
+  MapPin
 } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
 import { getStatementTransactions, getMoneyTrail } from '../services/finintelApi';
+import { AmountRangeFilter, AmountRange, EMPTY_RANGE, inAmountRange } from './AmountRangeFilter';
 import { BackendTransaction, MoneyTrailResponse } from '../types/api';
 
 export default function MoneyTrailPage() {
@@ -34,6 +36,7 @@ export default function MoneyTrailPage() {
   const [isStmtDropdownOpen, setIsStmtDropdownOpen] = useState(false);
   const [isTxDropdownOpen, setIsTxDropdownOpen] = useState(false);
   const [txSearchQuery, setTxSearchQuery] = useState('');
+  const [amountRange, setAmountRange] = useState<AmountRange>(EMPTY_RANGE);
 
   // Money Trail states
   const [trailData, setTrailData] = useState<MoneyTrailResponse['trail'] | null>(null);
@@ -113,6 +116,17 @@ export default function MoneyTrailPage() {
   }, [selectedTxId, fetchTrail]);
 
   const activeTx = creditTxns.find(t => t.id === selectedTxId);
+
+  // Credits matching both the search text and the amount-range filter.
+  const filteredCredits = creditTxns.filter((tx) => {
+    if (!inAmountRange(tx.amount, amountRange)) return false;
+    const q = txSearchQuery.toLowerCase();
+    return (
+      (tx.date?.toLowerCase().includes(q)) ||
+      (tx.amount || 0).toString().includes(q) ||
+      (tx.narration?.toLowerCase().includes(q))
+    );
+  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -215,11 +229,12 @@ export default function MoneyTrailPage() {
           
           {/* Custom Searchable Credit Selection Bar */}
           <div className="bg-white border border-[#E4E4E7] rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-            <div className="space-y-0.5">
-              <span className="text-[9px] uppercase tracking-wider font-bold text-[#71717A] font-mono">Select Credit to Trace</span>
+            <div className="space-y-1.5">
+              <span className="text-[9px] uppercase tracking-wider font-bold text-[#71717A] font-mono block">Select Credit to Trace</span>
               <p className="text-xs text-[#71717A] font-light">Chronological FIFO disperses from this chosen ledger deposit.</p>
+              <AmountRangeFilter value={amountRange} onChange={setAmountRange} label="Credit ₹" />
             </div>
-            
+
             {/* Custom Searchable Select combobox */}
             <div className={`relative w-full sm:w-120 ${isTxDropdownOpen ? 'z-50' : 'z-20'}`}>
               {isTxDropdownOpen && (
@@ -258,15 +273,7 @@ export default function MoneyTrailPage() {
                   
                   {/* Options list scroll container */}
                   <div className="overflow-y-auto max-h-56 py-1.5">
-                    {creditTxns
-                      .filter(tx => {
-                        const q = txSearchQuery.toLowerCase();
-                        return (
-                          tx.date?.toLowerCase().includes(q) ||
-                          (tx.amount || 0).toString().includes(q) ||
-                          tx.narration?.toLowerCase().includes(q)
-                        );
-                      })
+                    {filteredCredits
                       .map(tx => {
                         const isSelected = tx.id === selectedTxId;
                         return (
@@ -295,16 +302,9 @@ export default function MoneyTrailPage() {
                           </button>
                         );
                       })}
-                    {creditTxns.filter(tx => {
-                      const q = txSearchQuery.toLowerCase();
-                      return (
-                        tx.date?.toLowerCase().includes(q) ||
-                        (tx.amount || 0).toString().includes(q) ||
-                        tx.narration?.toLowerCase().includes(q)
-                      );
-                    }).length === 0 && (
+                    {filteredCredits.length === 0 && (
                       <div className="text-center py-6 text-xs text-zinc-400 font-light">
-                        No transactions match your search.
+                        No credits match your search / amount range.
                       </div>
                     )}
                   </div>
@@ -448,6 +448,11 @@ export default function MoneyTrailPage() {
                                   {node.narration}
                                 </p>
                               )}
+                              {node.location && (
+                                <p className="text-[9px] text-[#DC2626] font-bold font-mono flex items-center gap-1">
+                                  <MapPin className="w-2.5 h-2.5 shrink-0" /> {node.location.city}, {node.location.state}
+                                </p>
+                              )}
                               <p className="text-[9px] text-[#71717A] truncate font-light font-mono">
                                 Date: {node.date || 'N/A'} • TX ID: {node.debit_txn_id?.slice(0, 10)}...
                               </p>
@@ -513,6 +518,11 @@ export default function MoneyTrailPage() {
                           {node.narration && (
                             <p className="text-[10px] text-[#52525B] mt-1 font-light leading-relaxed line-clamp-2" title={node.narration}>
                               {node.narration}
+                            </p>
+                          )}
+                          {node.location && (
+                            <p className="text-[10px] text-[#DC2626] mt-1 font-bold font-mono flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" /> Cash-out: {node.location.city}, {node.location.state}
                             </p>
                           )}
                           <p className="text-[10px] text-[#71717A] mt-1 font-light leading-relaxed">

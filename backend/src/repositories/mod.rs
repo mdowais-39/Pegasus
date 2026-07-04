@@ -1,4 +1,5 @@
 pub mod statement;
+pub mod alert_repository;
 pub mod delete_repository;
 pub mod transaction_repository;
 pub mod entity_repository;

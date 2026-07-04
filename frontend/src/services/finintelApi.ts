@@ -98,6 +98,32 @@ export async function getHealth(): Promise<any> {
   return apiRequest<any>("/health");
 }
 
+// ---- Alerts --------------------------------------------------------------
+
+export interface Alert {
+  id: string;
+  statement_id: string | null;
+  account: string | null;
+  severity: string;
+  category: string | null;
+  title: string;
+  detail: string | null;
+  created_at: string | null;
+  acknowledged: boolean;
+}
+
+export async function getAlerts(unacknowledged = false, limit = 100): Promise<Alert[]> {
+  return apiRequest<Alert[]>(`/api/v1/alerts?unacknowledged=${unacknowledged}&limit=${limit}`);
+}
+
+export async function getAlertCount(): Promise<{ unacknowledged: number }> {
+  return apiRequest<{ unacknowledged: number }>("/api/v1/alerts/count");
+}
+
+export async function acknowledgeAlert(id: string): Promise<any> {
+  return apiRequest<any>(`/api/v1/alerts/${id}/ack`, { method: "POST" });
+}
+
 export async function getServicesHealth(): Promise<any> {
   return apiRequest<any>("/services/health");
 }

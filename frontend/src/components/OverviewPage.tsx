@@ -26,6 +26,7 @@ import {
   getCaseSummary,
   getTopSuspicious,
   getRoundTrips,
+  getAlerts,
 } from '../services/finintelApi';
 import { ValidationReport, BackendTransaction, CaseSummary } from '../types/api';
 
@@ -106,6 +107,7 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
 
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [alertToast, setAlertToast] = useState<number | null>(null);
 
   // Whole-network aggregate (across ALL uploaded statements, case_id="all")
   const [networkSummary, setNetworkSummary] = useState<CaseSummary | null>(null);
@@ -313,6 +315,16 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           setLatestStatementId(stmtId);
           await refreshSummary(stmtId);
           await fetchReportData(stmtId);
+
+          // Surface a toast if this statement produced malicious-activity alerts.
+          try {
+            const al = await getAlerts(true, 100);
+            const mine = al.filter((a) => a.statement_id === stmtId);
+            if (mine.length > 0) {
+              setAlertToast(mine.length);
+              setTimeout(() => setAlertToast(null), 8000);
+            }
+          } catch { /* alerts optional */ }
         } else if (jobStatus.status === 'failed') {
           setErrorMsg(jobStatus.error || "Job failed.");
           setActiveLogMsg("Forensics sequence aborted due to gateway processing failure.");
@@ -574,6 +586,16 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
           animation: pulseAmberNode 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
       `}</style>
+
+      {/* Malicious-activity toast on statement completion (reuses banner style) */}
+      {alertToast !== null && (
+        <div className="max-w-3xl mx-auto p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs font-bold flex items-center gap-2 animate-fade-in">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>
+            Malicious activity detected — {alertToast} finding{alertToast !== 1 ? 's' : ''} flagged in this statement. See the alerts bell (top-right) for details.
+          </span>
+        </div>
+      )}
 
       {/* Header Block Centered in Middle */}
       <div className="text-center space-y-2">

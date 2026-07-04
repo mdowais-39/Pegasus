@@ -20,6 +20,7 @@ _SELECT = """
 SELECT
     t.id::text         AS txn_id,
     t.date::text       AS date,
+    t.time,
     t.debit_credit,
     t.amount,
     t.narration,
@@ -30,7 +31,7 @@ WHERE t.is_valid = true
   AND (t.is_duplicate = false OR t.is_duplicate IS NULL)
 """
 
-_ORDER = " ORDER BY t.date NULLS LAST, t.created_at"
+_ORDER = " ORDER BY t.date NULLS LAST, t.time NULLS LAST, t.created_at"
 
 
 def _rows(query, params=None):

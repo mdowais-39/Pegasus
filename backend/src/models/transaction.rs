@@ -12,6 +12,9 @@ pub struct Transaction {
 
     pub date: Option<String>,
 
+    #[serde(default)]
+    pub time: Option<String>,
+
     pub amount: Option<f64>,
 
     pub txn_type: Option<String>,
