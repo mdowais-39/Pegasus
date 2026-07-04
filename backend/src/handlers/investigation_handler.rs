@@ -111,7 +111,9 @@ pub async fn top_suspicious(
     let limit = q.limit.unwrap_or(20);
     let g = &state.services.graph;
     let url = if case_id == "all" {
-        format!("{}/investigation/top-suspicious?limit={}", g, limit)
+        // representative whole-network view: every statement is guaranteed a
+        // seat so smaller statements aren't buried by global normalization
+        format!("{}/investigation/top-suspicious/representative?limit={}", g, limit)
     } else {
         // scope strictly to the selected statement — no leakage from others
         format!(
@@ -132,7 +134,7 @@ pub async fn top_risks(
     let limit = q.limit.unwrap_or(20);
     let g = &state.services.graph;
     let url = if case_id == "all" {
-        format!("{}/risk/top?limit={}", g, limit)
+        format!("{}/risk/top/representative?limit={}", g, limit)
     } else {
         format!("{}/risk/top/statement/{}?limit={}", g, enc(&case_id), limit)
     };

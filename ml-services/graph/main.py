@@ -403,9 +403,68 @@ def _risk_all(refresh: bool = False, with_external: bool = True):
     return scored
 
 
+def _representative_top_risks(per_statement: int = 3, refresh: bool = False):
+    """Whole-network risk ranking that GUARANTEES every statement is represented.
+
+    Problem: `_risk_all` scores all accounts in one combined graph and normalizes
+    volume-based signals (accumulation / fan / centrality) against GLOBAL maxima.
+    A smaller-volume statement's accounts therefore get suppressed and fall below
+    the top-N cutoff, so a whole-network report looks like it only covers the
+    largest statement.
+
+    Fix: start from the true whole-network ranking, then fold in each statement's
+    own top accounts scored *within that statement* (fair, un-suppressed), keeping
+    the higher of the two scores. Result: the genuine cross-statement ranking, but
+    no statement's key suspicious accounts can be buried by another's volume.
+    Cached under ('all','risk_repr'); the ingestion worker clears it on new data.
+    """
+    if not refresh:
+        cached = persistence.load("all", "risk_repr")
+        if cached:
+            return cached["payload"]
+
+    by_node = {r["node"]: dict(r) for r in _risk_all()}
+
+    for sid in _loader.all_statement_ids():
+        rows = _loader.load_statement_transactions(sid)
+        if not rows:
+            continue
+        # in-statement scoring (no external signals -> avoids N extra HTTP calls
+        # and judges each account fairly within its own statement)
+        for r in _risk_for_rows(rows, top_n=per_statement, with_external=False):
+            node = r["node"]
+            cur = by_node.get(node)
+            if cur is None:
+                entry = dict(r)
+                entry["source_statement"] = sid
+                by_node[node] = entry
+            elif r["risk_score"] > cur.get("risk_score", 0):
+                promoted = dict(cur)
+                promoted["risk_score"] = r["risk_score"]
+                promoted["risk_level"] = r["risk_level"]
+                promoted["factors"] = r.get("factors", cur.get("factors"))
+                promoted["top_reasons"] = r.get("top_reasons", cur.get("top_reasons"))
+                promoted["source_statement"] = sid
+                by_node[node] = promoted
+            else:
+                cur.setdefault("source_statement", sid)
+
+    ranked = sorted(by_node.values(), key=lambda r: r.get("risk_score", 0),
+                    reverse=True)
+    persistence.save("all", "risk_repr", ranked)
+    return ranked
+
+
 @app.get("/risk/top")
 def risk_top(limit: int = 20, include_external: bool = True, refresh: bool = False):
     scored = _risk_all(refresh=refresh, with_external=include_external)
+    return {"count": len(scored[:limit]), "top_risks": scored[:limit]}
+
+
+@app.get("/risk/top/representative")
+def risk_top_representative(limit: int = 20, refresh: bool = False):
+    """Whole-network top risks with every statement guaranteed representation."""
+    scored = _representative_top_risks(refresh=refresh)
     return {"count": len(scored[:limit]), "top_risks": scored[:limit]}
 
 
@@ -452,6 +511,16 @@ def investigation_top_suspicious_statement(statement_id: str, limit: int = 20,
     """Suspicious accounts scoped to one statement's transactions only."""
     rows = _loader.load_statement_transactions(statement_id)
     scored = _risk_for_rows(rows, with_external=include_external)
+    return {"count": len(scored),
+            "accounts": inv.top_suspicious(scored, limit, account_only)}
+
+
+@app.get("/investigation/top-suspicious/representative")
+def investigation_top_suspicious_representative(limit: int = 20,
+                                                account_only: bool = False,
+                                                refresh: bool = False):
+    """Whole-network suspicious accounts with every statement represented."""
+    scored = _representative_top_risks(refresh=refresh)
     return {"count": len(scored),
             "accounts": inv.top_suspicious(scored, limit, account_only)}
 

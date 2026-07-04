@@ -42,11 +42,18 @@ class ReportBuilder:
         validation = self.loader.validation_summary(stmt)
         entities = self.loader.top_entities(25)
 
+        # Risk + flow must follow the SAME scope as the counts above:
+        #  - scoped: this statement's transactions only.
+        #  - all   : the whole network, but via the *representative* ranking so
+        #    every statement's top suspicious accounts are guaranteed to appear
+        #    (a plain global top-N buries smaller statements under global
+        #    volume normalization).
         if scoped:
             analysis = _get(f"{GRAPH_URL}/flow/analyze/statement/{case_id}")
+            risks = _get(f"{GRAPH_URL}/risk/top/statement/{case_id}?limit=20")
         else:
             analysis = _get(f"{GRAPH_URL}/flow/analyze/all")
-        risks = _get(f"{GRAPH_URL}/risk/top?limit=20")
+            risks = _get(f"{GRAPH_URL}/risk/top/representative?limit=25")
 
         mf = analysis.get("summary", {}) if isinstance(analysis, dict) else {}
         round_trips = analysis.get("round_trips", []) if isinstance(analysis, dict) else []

@@ -35,7 +35,7 @@ pub async fn case_summary(
 
     let (risk_url, flow_url) = if whole_network {
         (
-            format!("{}/risk/top?limit=5", g),
+            format!("{}/risk/top/representative?limit=5", g),
             format!("{}/flow/money-flow/all", g),
         )
     } else {

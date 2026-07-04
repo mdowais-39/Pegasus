@@ -83,3 +83,15 @@ class PostgresLoader:
                        ORDER BY t.date NULLS LAST, t.created_at""",
             [account, account, account],
         )
+
+    def all_statement_ids(self):
+        """Statement IDs that actually carry clean transactions (usable data)."""
+        rows = _rows(
+            """
+            SELECT DISTINCT t.statement_id
+            FROM transactions t
+            WHERE t.is_valid = true
+              AND (t.is_duplicate = false OR t.is_duplicate IS NULL)
+            """
+        )
+        return [r["statement_id"] for r in rows if r.get("statement_id")]
