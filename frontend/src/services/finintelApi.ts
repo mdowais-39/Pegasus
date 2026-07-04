@@ -79,6 +79,21 @@ export async function getReportJson(caseId: string): Promise<any> {
   return apiRequest<any>(`/api/v1/reports/${caseId}/json`);
 }
 
+export interface EmailReportPayload {
+  recipients: string[];
+  format?: "pdf" | "excel" | "docx";
+  subject?: string;
+  message?: string;
+  sender_name?: string;
+}
+
+export async function emailReport(caseId: string, payload: EmailReportPayload): Promise<any> {
+  return apiRequest<any>(`/api/v1/reports/${caseId}/email`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getHealth(): Promise<any> {
   return apiRequest<any>("/health");
 }

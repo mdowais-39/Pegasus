@@ -440,7 +440,14 @@ export default function MoneyTrailPage() {
                                   Ratio: {formatPercent(amt, srcAmt)}
                                 </span>
                               </div>
-                              <h4 className="font-bold text-[#18181B] truncate font-sans">{node.destination || 'Unspecified Account'}</h4>
+                              <h4 className="font-bold text-[#18181B] truncate font-sans" title={node.destination || node.narration || ''}>
+                                {node.destination || node.narration || 'Unspecified Account'}
+                              </h4>
+                              {node.narration && (
+                                <p className="text-[9.5px] text-[#52525B] line-clamp-2 font-light font-sans" title={node.narration}>
+                                  {node.narration}
+                                </p>
+                              )}
                               <p className="text-[9px] text-[#71717A] truncate font-light font-mono">
                                 Date: {node.date || 'N/A'} • TX ID: {node.debit_txn_id?.slice(0, 10)}...
                               </p>
@@ -498,9 +505,16 @@ export default function MoneyTrailPage() {
                         <CornerDownRight className="w-3.5 h-3.5 text-[#71717A] shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-baseline gap-2">
-                            <span className="font-bold text-[#18181B] truncate">{node.destination || 'Unspecified Account'}</span>
+                            <span className="font-bold text-[#18181B] truncate" title={node.destination || node.narration || ''}>
+                              {node.destination || node.narration || 'Unspecified Account'}
+                            </span>
                             <span className="font-extrabold text-[#C2410C] font-mono shrink-0">{formatCurrency(amt)}</span>
                           </div>
+                          {node.narration && (
+                            <p className="text-[10px] text-[#52525B] mt-1 font-light leading-relaxed line-clamp-2" title={node.narration}>
+                              {node.narration}
+                            </p>
+                          )}
                           <p className="text-[10px] text-[#71717A] mt-1 font-light leading-relaxed">
                             Chronologically charged against credit trigger volume at proportion ratio of <strong className="font-bold text-zinc-800 font-mono">{formatPercent(amt, srcAmt)}</strong>.
                           </p>

@@ -3,13 +3,14 @@ use axum::{
     extract::{Path, State},
     http::header,
     response::Response,
+    Json,
 };
 use serde_json::{json, Value};
 
 use crate::{
     api::{ApiResponse, ApiResult, AppError},
     repositories::read_repository,
-    services::proxy::{fetch_bytes, get_json},
+    services::proxy::{fetch_bytes, get_json, post_json},
     state::app_state::AppState,
 };
 
@@ -94,6 +95,19 @@ pub async fn report_pdf(
     Path(case_id): Path<String>,
 ) -> Result<Response, AppError> {
     download(&state, &case_id, "pdf").await
+}
+
+/// POST /api/v1/reports/{case_id}/email
+/// Body: { recipients: [..], format?, subject?, message?, sender_name? }
+/// Builds the report on the report service and emails it as an attachment.
+pub async fn report_email(
+    State(state): State<AppState>,
+    Path(case_id): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult<Value> {
+    let url = format!("{}/report/{}/email", state.services.report, case_id);
+    let data = post_json(&state.http_client, &url, &body).await?;
+    Ok(ApiResponse::success(data))
 }
 
 /// GET /api/v1/reports/{case_id}/excel

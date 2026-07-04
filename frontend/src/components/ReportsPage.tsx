@@ -14,16 +14,21 @@ import {
   TrendingUp, 
   Calendar, 
   Database,
-  Loader2
+  Loader2,
+  Mail,
+  X,
+  Send
 } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
-import { 
-  getReportJson, 
-  getStatementTransactions, 
-  getRoundTrips, 
-  getTopSuspicious 
+import {
+  getReportJson,
+  getStatementTransactions,
+  getRoundTrips,
+  getTopSuspicious,
+  emailReport
 } from '../services/finintelApi';
 import { downloadReport } from '../services/downloads';
+import { getSession } from '../services/auth';
 import { RoundTrip } from '../types/api';
 
 export default function ReportsPage() {
@@ -33,6 +38,55 @@ export default function ReportsPage() {
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Email report modal state
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState('');
+  const [emailFormat, setEmailFormat] = useState<'pdf' | 'excel' | 'docx'>('pdf');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const handleSendEmail = async () => {
+    setEmailResult(null);
+    const recipients = emailRecipients
+      .split(/[\s,;]+/)
+      .map((r) => r.trim())
+      .filter(Boolean);
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalid = recipients.filter((r) => !emailRe.test(r));
+    if (recipients.length === 0) {
+      setEmailResult({ ok: false, msg: 'Enter at least one recipient email address.' });
+      return;
+    }
+    if (invalid.length > 0) {
+      setEmailResult({ ok: false, msg: `Invalid email(s): ${invalid.join(', ')}` });
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const res = await emailReport(caseId, {
+        recipients,
+        format: emailFormat,
+        subject: emailSubject.trim() || undefined,
+        message: emailMessage.trim() || undefined,
+        sender_name: getSession()?.name || undefined,
+      });
+      if (res?.status === 'sent') {
+        setEmailResult({ ok: true, msg: `Report emailed to ${recipients.length} recipient(s).` });
+        setSuccessMessage(`Investigation report emailed to ${recipients.join(', ')}.`);
+        setTimeout(() => setSuccessMessage(null), 4000);
+        setTimeout(() => setIsEmailOpen(false), 1200);
+      } else {
+        setEmailResult({ ok: false, msg: res?.message || 'Failed to send report email.' });
+      }
+    } catch (err: any) {
+      setEmailResult({ ok: false, msg: err?.message || 'Failed to send report email.' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   // Custom Scope dropdown state
   const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false);
@@ -253,6 +307,15 @@ export default function ReportsPage() {
 
           {/* Action triggers */}
           <div className="flex gap-2.5 w-full sm:w-auto">
+            <button
+              onClick={() => { setEmailResult(null); setIsEmailOpen(true); }}
+              disabled={isLoading}
+              className="flex-1 sm:flex-initial px-3.5 py-2 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#18181B] text-xs font-semibold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer font-sans disabled:opacity-50"
+            >
+              <Mail className="w-3.5 h-3.5 text-[#52525B]" />
+              <span>Email</span>
+            </button>
+
             <button
               onClick={handleExportExcel}
               disabled={isExportingExcel || isExportingPDF || isExportingDocx || isLoading}
@@ -562,7 +625,7 @@ export default function ReportsPage() {
               <div className="bg-white border border-[#E4E4E7] rounded-xl p-5 flex flex-col space-y-4 shadow-xs flex-1">
                 <div className="border-b border-[#F4F4F5] pb-2">
                   <h3 className="text-xs font-bold text-[#18181B] uppercase tracking-wider font-mono">
-                    Circular Transfer Loop Cycles ({roundTripsList.length})
+                    Detected Round Trips ({roundTripsList.length})
                   </h3>
                 </div>
 
@@ -693,6 +756,111 @@ export default function ReportsPage() {
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* Email Report Modal */}
+      {isEmailOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !isSendingEmail && setIsEmailOpen(false)} />
+          <div className="relative bg-white border border-[#E4E4E7] rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 animate-fade-in">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#18181B] font-display">Email Investigation Report</h3>
+                  <p className="text-[11px] text-[#71717A] font-light">
+                    Scope: {caseId === 'all' ? 'Whole Network (all statements)' : `Statement ${safeSlice(caseId, 0, 8)}...`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => !isSendingEmail && setIsEmailOpen(false)}
+                className="text-[#71717A] hover:text-[#18181B] p-1 rounded-md hover:bg-[#F4F4F5] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-[#52525B] uppercase font-mono block">Recipients</label>
+                <input
+                  type="text"
+                  value={emailRecipients}
+                  onChange={(e) => setEmailRecipients(e.target.value)}
+                  placeholder="analyst@agency.gov, lead@agency.gov"
+                  className="w-full bg-white border border-[#E4E4E7] focus:border-[#18181B] rounded-md px-3 py-2 text-xs text-[#18181B] focus:outline-none font-sans"
+                />
+                <p className="text-[9.5px] text-[#71717A] font-light">Separate multiple addresses with commas.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[#52525B] uppercase font-mono block">Attachment Format</label>
+                  <select
+                    value={emailFormat}
+                    onChange={(e) => setEmailFormat(e.target.value as 'pdf' | 'excel' | 'docx')}
+                    className="w-full bg-white border border-[#E4E4E7] focus:border-[#18181B] rounded-md px-3 py-2 text-xs text-[#18181B] focus:outline-none cursor-pointer font-sans"
+                  >
+                    <option value="pdf">PDF Report</option>
+                    <option value="excel">Excel Workbook</option>
+                    <option value="docx">Word Document</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[#52525B] uppercase font-mono block">Subject (optional)</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Auto-generated if blank"
+                    className="w-full bg-white border border-[#E4E4E7] focus:border-[#18181B] rounded-md px-3 py-2 text-xs text-[#18181B] focus:outline-none font-sans"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-[#52525B] uppercase font-mono block">Message (optional)</label>
+                <textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  rows={3}
+                  placeholder="Add a note for the recipients. A case summary is appended automatically."
+                  className="w-full bg-white border border-[#E4E4E7] focus:border-[#18181B] rounded-md px-3 py-2 text-xs text-[#18181B] focus:outline-none font-sans resize-none"
+                />
+              </div>
+
+              {emailResult && (
+                <div className={`p-2.5 rounded-lg border text-[11px] font-semibold flex items-start gap-2 ${
+                  emailResult.ok ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]' : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  {emailResult.ok ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />}
+                  <span>{emailResult.msg}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                onClick={() => !isSendingEmail && setIsEmailOpen(false)}
+                disabled={isSendingEmail}
+                className="px-3.5 py-2 bg-white border border-[#E4E4E7] hover:border-[#18181B] text-[#52525B] text-xs font-semibold rounded-md cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={isSendingEmail}
+                className="px-4 py-2 bg-[#18181B] hover:bg-black text-white text-xs font-semibold rounded-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSendingEmail ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                <span>{isSendingEmail ? 'Sending...' : 'Send Report'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

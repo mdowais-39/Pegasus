@@ -148,6 +148,7 @@ export interface MoneyTrailResponse {
       amount?: number;
       destination?: string;
       date?: string;
+      narration?: string;
       [key: string]: any;
     }>;
     [key: string]: any;

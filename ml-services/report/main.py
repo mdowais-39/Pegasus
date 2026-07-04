@@ -5,16 +5,33 @@ Run: uvicorn main:app --reload --port 8010
 """
 
 import io
+from typing import List, Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 from services.report_builder import ReportBuilder
 from services.excel_report import build_excel
 from services.docx_report import build_docx
+from services import email_service
 
 app = FastAPI()
 builder = ReportBuilder()
+
+
+# (attachment builder, filename, MIME) per requested format
+def _render_attachment(report, fmt, case_id):
+    fmt = (fmt or "pdf").lower()
+    if fmt in ("excel", "xlsx"):
+        return (build_excel(report), f"investigation_report_{case_id}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "excel")
+    if fmt in ("docx", "word"):
+        return (build_docx(report), f"investigation_report_{case_id}.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx")
+    from services.pdf_report import build_pdf
+    return (build_pdf(report), f"investigation_report_{case_id}.pdf",
+            "application/pdf", "pdf")
 
 
 @app.get("/health")
@@ -66,3 +83,71 @@ def report_pdf(case_id: str, refresh: bool = False):
             content={"error": "reportlab not installed. Run: pip install reportlab"},
         )
     return _download(data, "application/pdf", f"investigation_report_{case_id}.pdf")
+
+
+class EmailRequest(BaseModel):
+    recipients: List[str]
+    format: str = "pdf"
+    subject: Optional[str] = None
+    message: Optional[str] = None
+    sender_name: Optional[str] = None
+
+
+@app.post("/report/{case_id}/email")
+def report_email(case_id: str, req: EmailRequest, refresh: bool = False):
+    """Build the investigation report and email it as an attachment.
+
+    Returns 200 with {"status": "sent"|"error", ...} so the gateway/frontend can
+    surface a precise message (e.g. SMTP not configured) rather than a generic 5xx.
+    """
+    recipients = [r.strip() for r in (req.recipients or []) if r and r.strip()]
+    if not recipients:
+        return {"status": "error", "message": "No recipient email addresses provided."}
+
+    if not email_service.is_configured():
+        return {"status": "error",
+                "message": "Email delivery is not configured on the server "
+                           "(set SMTP_HOST / SMTP_FROM / SMTP_USER / SMTP_PASSWORD)."}
+
+    try:
+        report = builder.build(case_id, refresh=refresh)
+    except Exception as exc:
+        return {"status": "error", "message": f"Failed to build report: {exc}"}
+
+    try:
+        data, filename, mime, fmt = _render_attachment(report, req.format, case_id)
+    except ImportError:
+        return {"status": "error",
+                "message": "PDF rendering requires reportlab. Run: pip install reportlab"}
+    except Exception as exc:
+        return {"status": "error", "message": f"Failed to render report: {exc}"}
+
+    scope = report.get("scope") or f"Case {case_id}"
+    es = report.get("executive_summary", {}) or {}
+    subject = req.subject or f"FinIntel Investigation Report — {scope}"
+
+    intro = (f"{req.sender_name} has shared a FinIntel investigation report."
+             if req.sender_name else
+             "You have received a FinIntel investigation report.")
+    note = f"\n\nMessage:\n{req.message}\n" if req.message else "\n"
+    body = (
+        f"{intro}{note}\n"
+        f"Investigation Summary\n"
+        f"---------------------\n"
+        f"Scope              : {scope}\n"
+        f"Generated          : {report.get('generated_at', 'N/A')}\n"
+        f"Statements         : {es.get('statements', 0)}\n"
+        f"Transactions       : {es.get('transactions', 0)}\n"
+        f"Entities resolved  : {es.get('entities', 0)}\n"
+        f"Round trips detected: {es.get('round_trips_detected', 0)}\n"
+        f"High-risk accounts : {es.get('high_risk_accounts', 0)}\n\n"
+        f"The full investigation report is attached ({fmt.upper()}).\n\n"
+        f"— FinIntel OS (automated delivery)"
+    )
+
+    try:
+        email_service.send_report_email(recipients, subject, body, data, filename, mime)
+    except Exception as exc:
+        return {"status": "error", "message": f"Failed to send email: {exc}"}
+
+    return {"status": "sent", "recipients": recipients, "format": fmt, "subject": subject}

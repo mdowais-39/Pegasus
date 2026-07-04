@@ -12,7 +12,9 @@ use crate::handlers::{
         top_suspicious,
     },
     job_handler::get_job_status,
-    report_handler::{case_summary, report_docx, report_excel, report_json, report_pdf},
+    report_handler::{
+        case_summary, report_docx, report_email, report_excel, report_json, report_pdf,
+    },
     statement_handler::{
         clear_database, delete_statement, get_statement, get_transactions,
         get_validation_report, list_statements, upload_statement,
@@ -65,6 +67,7 @@ pub fn api_routes() -> Router<AppState> {
         .route("/api/v1/reports/{case_id}/pdf", get(report_pdf))
         .route("/api/v1/reports/{case_id}/excel", get(report_excel))
         .route("/api/v1/reports/{case_id}/docx", get(report_docx))
+        .route("/api/v1/reports/{case_id}/email", post(report_email))
         // ---- docs ----
         .route("/openapi.json", get(openapi))
         .route("/docs", get(swagger_ui))

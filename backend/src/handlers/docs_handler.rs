@@ -50,6 +50,8 @@ const ENDPOINTS: &[(&str, &str, &str, &str)] = &[
     ("get", "/api/v1/reports/{case_id}/pdf", "reporting", "Investigation report (PDF download)"),
     ("get", "/api/v1/reports/{case_id}/excel", "reporting", "Investigation report (Excel download)"),
     ("get", "/api/v1/reports/{case_id}/docx", "reporting", "Investigation report (DOCX download)"),
+    ("post", "/api/v1/reports/{case_id}/email", "reporting",
+        "Email the investigation report as an attachment to recipients"),
 ];
 
 fn path_params(path: &str) -> Vec<Value> {

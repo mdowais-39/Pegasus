@@ -954,13 +954,13 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
               
               switch(key) {
                 case 'upload':
-                  title = 'Evidence Ingestion';
+                  title = 'Statement Upload';
                   sub = currentStatementId ? 'Document enqueued' : 'Ingest statement';
                   IconComponent = UploadCloud;
                   iconBg = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
                   break;
                 case 'ocr':
-                  title = 'OCR Extraction';
+                  title = 'Data Extraction';
                   sub = status === 'queued' ? 'PDF parsing queued' : (status === 'running' ? `Extracting text (${ocrProgress}%)` : 'Document mapped');
                   IconComponent = Cpu;
                   iconBg = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
@@ -972,55 +972,55 @@ export default function OverviewPage({ onNavigateToView }: OverviewPageProps) {
                   iconBg = 'bg-amber-50 text-amber-700 border border-amber-100';
                   break;
                 case 'standardization':
-                  title = 'Standardization';
+                  title = 'Data Standardization';
                   sub = status === 'queued' ? 'Schema mapping' : (status === 'running' ? `Mapping keys...` : 'Structure normalized');
                   IconComponent = ShieldCheck;
                   iconBg = 'bg-sky-50 text-sky-700 border border-sky-100';
                   break;
                 case 'validation':
-                  title = 'Validation Engine';
+                  title = 'Data Validation';
                   sub = status === 'queued' ? 'Integrity checks' : (status === 'running' ? `Scanning rows...` : 'Constraints verified');
                   IconComponent = ShieldCheck;
                   iconBg = 'bg-rose-50 text-rose-700 border border-rose-100';
                   break;
                 case 'database':
-                  title = 'Data Base Store';
+                  title = 'Secure Storage';
                   sub = status === 'queued' ? 'Saving transaction DB' : (status === 'running' ? `Writing DB store...` : 'Persisted to SQL');
                   IconComponent = FileText;
                   iconBg = 'bg-teal-50 text-teal-700 border border-teal-100';
                   break;
                 case 'loops':
-                  title = 'Round Trip Seek';
+                  title = 'Round-Trip Detection';
                   sub = status === 'queued' ? 'Trace loops' : (status === 'running' ? 'Circular scan...' : 'Loops parsed');
                   IconComponent = RefreshCw;
                   iconBg = 'bg-pink-50 text-pink-700 border border-pink-100';
                   break;
                 case 'flow':
-                  title = 'Money Flow Map';
+                  title = 'Money Flow Mapping';
                   sub = status === 'queued' ? 'Account graphs' : (status === 'running' ? 'Mapping nodes...' : 'Topology complete');
                   IconComponent = GitFork;
                   iconBg = 'bg-violet-50 text-violet-700 border border-violet-100';
                   break;
                 case 'trails':
-                  title = 'Money Trail Trace';
+                  title = 'Money Trail Tracking';
                   sub = status === 'queued' ? 'FIFO sequences' : (status === 'running' ? 'Resolving trails...' : 'FIFO trails computed');
                   IconComponent = Activity;
                   iconBg = 'bg-blue-50 text-blue-700 border border-blue-100';
                   break;
                 case 'report':
-                  title = 'Report Builder';
+                  title = 'Investigation Report';
                   sub = status === 'queued' ? 'Dossier compiling' : (status === 'running' ? 'Layering details...' : 'Summary constructed');
                   IconComponent = FileCheck;
                   iconBg = 'bg-orange-50 text-orange-700 border border-orange-100';
                   break;
                 case 'exportPdf':
-                  title = 'PDF Vector Brief';
+                  title = 'PDF Report';
                   sub = status === 'complete' ? '✓ PDF Compiled' : 'Queued';
                   IconComponent = FileDown;
                   iconBg = 'bg-red-50 text-red-700 border border-red-100';
                   break;
                 case 'exportExcel':
-                  title = 'Excel Data Ledger';
+                  title = 'Excel Export';
                   sub = status === 'complete' ? '✓ Spreadsheet Ready' : 'Queued';
                   IconComponent = FileSpreadsheet;
                   iconBg = 'bg-green-50 text-green-700 border border-green-100';

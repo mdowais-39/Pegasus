@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check } from 'lucide-react';
+import { GitFork, Loader2, AlertTriangle, HelpCircle, Copy, Calendar, ArrowRight, ArrowLeft, ChevronDown, Check, RefreshCw, X } from 'lucide-react';
 import { useFinintelData } from '../context/FinintelDataContext';
-import { getMoneyFlow } from '../services/finintelApi';
+import { getMoneyFlow, getRoundTrips } from '../services/finintelApi';
+import { RoundTrip } from '../types/api';
 
 interface NetworkNode {
   id: string;
@@ -42,6 +43,12 @@ export default function MoneyFlowPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false);
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+
+  // Round-trip overlay: cycles detected on the same graph, selectable to
+  // highlight the circular path within the money-flow visualization.
+  const [roundTrips, setRoundTrips] = useState<RoundTrip[]>([]);
+  const [selectedTripIdx, setSelectedTripIdx] = useState<number | null>(null);
+  const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
 
   const fetchFlow = useCallback(async () => {
     setIsLoading(true);
@@ -212,6 +219,42 @@ export default function MoneyFlowPage() {
     fetchFlow();
   }, [fetchFlow]);
 
+  // Round trips follow the same scope; reset any active cycle on scope change.
+  useEffect(() => {
+    let cancelled = false;
+    setSelectedTripIdx(null);
+    (async () => {
+      try {
+        const resp = await getRoundTrips(caseId);
+        if (!cancelled) setRoundTrips(resp.round_trips || []);
+      } catch {
+        if (!cancelled) setRoundTrips([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  const selectedTrip = selectedTripIdx != null ? roundTrips[selectedTripIdx] : null;
+  const tripNodeList: string[] = selectedTrip ? (selectedTrip.nodes || selectedTrip.accounts || []) : [];
+  const tripNodeSet = new Set(tripNodeList);
+  // directed cycle edges: node[i] -> node[(i+1)%N]
+  const tripEdgeKeys = new Set<string>();
+  if (tripNodeList.length > 1) {
+    for (let i = 0; i < tripNodeList.length; i++) {
+      tripEdgeKeys.add(`${tripNodeList[i]}->${tripNodeList[(i + 1) % tripNodeList.length]}`);
+    }
+  }
+  const tripActive = selectedTrip != null;
+
+  const selectRoundTrip = (idx: number | null) => {
+    setSelectedTripIdx(idx);
+    setIsTripDropdownOpen(false);
+    // Full network guarantees every cycle node is positioned/visible.
+    if (idx != null && !showAllNodes && totalNodesCount > 15) {
+      setShowAllNodes(true);
+    }
+  };
+
   const currentNode = nodes[activeNodeId] || Object.values(nodes)[0] || null;
 
   // Connected nodes highlighting logic
@@ -360,66 +403,142 @@ export default function MoneyFlowPage() {
                 Select a node to inspect its associated flows and highlight connections.
               </span>
               
-              <div className={`relative ${isViewDropdownOpen ? 'z-50' : 'z-30'}`}>
-                {isViewDropdownOpen && (
-                  <div className="fixed inset-0 z-40" onClick={() => setIsViewDropdownOpen(false)} />
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
-                  className="flex items-center justify-between gap-1.5 bg-[#FAF9F6] border border-[#E4E4E7] hover:border-zinc-400 rounded p-1 px-2.5 text-[10px] font-semibold text-zinc-950 cursor-pointer min-w-[150px] relative transition-all"
-                >
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] uppercase font-bold text-[#71717A] font-mono pr-1.5 border-r border-[#E4E4E7]">View</span>
-                    <span className="truncate max-w-[100px] font-medium text-zinc-900">
-                      {showAllNodes ? `Full Network (${totalNodesCount} nodes)` : 'Top 15 Nodes (Clean)'}
-                    </span>
-                  </div>
-                  <ChevronDown className="w-2.5 h-2.5 text-[#71717A] ml-0.5" />
-                </button>
-
-                {isViewDropdownOpen && (
-                  <div className="absolute right-0 mt-1 w-52 bg-white border border-[#E4E4E7] rounded-lg shadow-md z-50 py-1 max-h-48 overflow-y-auto animate-fade-in">
+              <div className="flex items-center gap-2">
+                {/* Round-trip highlight selector — cycles integrated into the graph */}
+                {roundTrips.length > 0 && (
+                  <div className={`relative ${isTripDropdownOpen ? 'z-50' : 'z-30'}`}>
+                    {isTripDropdownOpen && (
+                      <div className="fixed inset-0 z-40" onClick={() => setIsTripDropdownOpen(false)} />
+                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowAllNodes(false);
-                        setIsViewDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
-                        !showAllNodes ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                      onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
+                      className={`flex items-center justify-between gap-1.5 border rounded p-1 px-2.5 text-[10px] font-semibold cursor-pointer min-w-[150px] relative transition-all ${
+                        tripActive ? 'bg-red-50 border-red-300 text-red-800' : 'bg-[#FAF9F6] border-[#E4E4E7] hover:border-zinc-400 text-zinc-950'
                       }`}
                     >
-                      <span>Top 15 Nodes (Clean)</span>
-                      {!showAllNodes && <Check className="w-3 h-3 text-zinc-800" />}
+                      <div className="flex items-center gap-1">
+                        <RefreshCw className={`w-2.5 h-2.5 ${tripActive ? 'text-red-600' : 'text-[#71717A]'}`} />
+                        <span className="text-[9px] uppercase font-bold font-mono pr-1.5 border-r border-[#E4E4E7]">Round Trip</span>
+                        <span className="truncate max-w-[90px] font-medium">
+                          {tripActive ? `#${selectedTrip?.id ?? (selectedTripIdx! + 1)}` : `${roundTrips.length} detected`}
+                        </span>
+                      </div>
+                      <ChevronDown className="w-2.5 h-2.5 text-[#71717A] ml-0.5" />
                     </button>
 
-                    {(totalNodesCount > 15 || showAllNodes) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAllNodes(true);
-                          setIsViewDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
-                          showAllNodes ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
-                        }`}
-                      >
-                        <span>Full Network ({totalNodesCount} nodes)</span>
-                        {showAllNodes && <Check className="w-3 h-3 text-zinc-800" />}
-                      </button>
+                    {isTripDropdownOpen && (
+                      <div className="absolute right-0 mt-1 w-72 bg-white border border-[#E4E4E7] rounded-lg shadow-md z-50 py-1 max-h-56 overflow-y-auto animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={() => selectRoundTrip(null)}
+                          className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                            !tripActive ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                          }`}
+                        >
+                          <span>None (Money Flow)</span>
+                          {!tripActive && <Check className="w-3 h-3 text-zinc-800" />}
+                        </button>
+                        {roundTrips.map((trip, idx) => {
+                          const list = trip.nodes || trip.accounts || [];
+                          const amt = trip.total_amount ?? trip.min_amount ?? 0;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => selectRoundTrip(idx)}
+                              className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between gap-2 hover:bg-[#FAF9F6] ${
+                                selectedTripIdx === idx ? 'bg-red-50 font-bold text-red-800' : 'text-zinc-700 font-light'
+                              }`}
+                            >
+                              <span className="truncate">Round Trip #{trip.id ?? idx + 1} · {list.length} hops</span>
+                              <span className="font-mono font-semibold text-[#C2410C] shrink-0">{formatCurrency(amt)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 )}
+
+                <div className={`relative ${isViewDropdownOpen ? 'z-50' : 'z-30'}`}>
+                  {isViewDropdownOpen && (
+                    <div className="fixed inset-0 z-40" onClick={() => setIsViewDropdownOpen(false)} />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+                    className="flex items-center justify-between gap-1.5 bg-[#FAF9F6] border border-[#E4E4E7] hover:border-zinc-400 rounded p-1 px-2.5 text-[10px] font-semibold text-zinc-950 cursor-pointer min-w-[150px] relative transition-all"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] uppercase font-bold text-[#71717A] font-mono pr-1.5 border-r border-[#E4E4E7]">View</span>
+                      <span className="truncate max-w-[100px] font-medium text-zinc-900">
+                        {showAllNodes ? `Full Network (${totalNodesCount} nodes)` : 'Top 15 Nodes (Clean)'}
+                      </span>
+                    </div>
+                    <ChevronDown className="w-2.5 h-2.5 text-[#71717A] ml-0.5" />
+                  </button>
+
+                  {isViewDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-52 bg-white border border-[#E4E4E7] rounded-lg shadow-md z-50 py-1 max-h-48 overflow-y-auto animate-fade-in">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAllNodes(false);
+                          setIsViewDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                          !showAllNodes ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                        }`}
+                      >
+                        <span>Top 15 Nodes (Clean)</span>
+                        {!showAllNodes && <Check className="w-3 h-3 text-zinc-800" />}
+                      </button>
+
+                      {(totalNodesCount > 15 || showAllNodes) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAllNodes(true);
+                            setIsViewDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-[10px] transition-colors flex items-center justify-between hover:bg-[#FAF9F6] ${
+                            showAllNodes ? 'bg-zinc-50 font-bold text-[#18181B]' : 'text-zinc-700 font-light'
+                          }`}
+                        >
+                          <span>Full Network ({totalNodesCount} nodes)</span>
+                          {showAllNodes && <Check className="w-3 h-3 text-zinc-800" />}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Stable Canvas Board Wrapper */}
             <div className="w-full h-[36rem] bg-[#FAF9F6] rounded-xl border border-[#E4E4E7] relative overflow-hidden select-none">
               {/* Overlay warning for hidden nodes */}
-              {!showAllNodes && hiddenCount > 0 && (
+              {!showAllNodes && hiddenCount > 0 && !tripActive && (
                 <div className="absolute top-4 right-4 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 text-[10px] text-amber-800 font-mono shadow-sm z-30">
                   Showing top 15 nodes. {hiddenCount} smaller nodes hidden from view.
+                </div>
+              )}
+
+              {/* Round-trip highlight banner */}
+              {tripActive && selectedTrip && (
+                <div className="absolute top-4 left-4 right-4 bg-red-50 border border-red-300 rounded-lg px-3 py-1.5 text-[10px] text-red-800 font-mono shadow-sm z-30 flex items-center gap-2">
+                  <RefreshCw className="w-3 h-3 text-red-600 shrink-0" />
+                  <span className="truncate flex-1">
+                    Round Trip #{selectedTrip.id ?? (selectedTripIdx! + 1)} · {tripNodeList.length} hops · {formatCurrency(selectedTrip.total_amount ?? selectedTrip.min_amount ?? 0)} circulated back to origin
+                  </span>
+                  <button
+                    onClick={() => selectRoundTrip(null)}
+                    className="hover:text-red-950 shrink-0 cursor-pointer"
+                    title="Clear round-trip highlight"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               )}
 
@@ -499,8 +618,15 @@ export default function MoneyFlowPage() {
                     const endPos = nodes[conn.to];
                     if (!startPos || !endPos) return null;
 
-                    const isEdgeActive = activeNodeId === conn.from || activeNodeId === conn.to;
-                    const isEdgeDimmed = activeNodeId && !isEdgeActive;
+                    // When a round trip is selected, highlight ONLY its cycle
+                    // edges; otherwise fall back to the selected-node highlight.
+                    const isEdgeOnCycle = tripActive && tripEdgeKeys.has(`${conn.from}->${conn.to}`);
+                    const isEdgeActive = tripActive
+                      ? isEdgeOnCycle
+                      : (activeNodeId === conn.from || activeNodeId === conn.to);
+                    const isEdgeDimmed = tripActive
+                      ? !isEdgeOnCycle
+                      : (activeNodeId && !isEdgeActive);
 
                     // Curved (quadratic) edge: bows each edge out along the
                     // perpendicular so crossing edges separate and A->B / B->A
@@ -595,7 +721,11 @@ export default function MoneyFlowPage() {
                   {/* Draw Nodes */}
                   {Object.values(nodes).map((node) => {
                     const isSelected = activeNodeId === node.id;
-                    const isNodeDimmed = activeNodeId && !connectedNodeIds.has(node.id);
+                    const isNodeOnCycle = tripActive && tripNodeSet.has(node.id);
+                    // In round-trip mode, dim everything not on the cycle.
+                    const isNodeDimmed = tripActive
+                      ? !isNodeOnCycle
+                      : (activeNodeId && !connectedNodeIds.has(node.id));
 
                     const roleColor = 
                       node.role === 'sender' ? 'fill-[#EFF6FF] stroke-[#93C5FD]' : 
@@ -622,22 +752,32 @@ export default function MoneyFlowPage() {
                       >
                         {/* Spinning dashed selector circle when selected */}
                         {isSelected && (
-                          <circle 
-                            r={selectorRadius} 
-                            fill="none" 
-                            stroke="#18181B" 
-                            strokeWidth="1.5" 
-                            strokeDasharray="4 4" 
-                            className="animate-spin" 
-                            style={{ animationDuration: '8s' }} 
+                          <circle
+                            r={selectorRadius}
+                            fill="none"
+                            stroke="#18181B"
+                            strokeWidth="1.5"
+                            strokeDasharray="4 4"
+                            className="animate-spin"
+                            style={{ animationDuration: '8s' }}
                           />
                         )}
 
-                        <circle 
-                          r={nodeRadius} 
-                          className={`${roleColor}`} 
-                          strokeWidth={isSelected ? '2.5' : '1.5'} 
-                          stroke={isSelected ? '#18181B' : undefined}
+                        {/* Red ring marks a node on the selected round-trip cycle */}
+                        {isNodeOnCycle && (
+                          <circle
+                            r={selectorRadius}
+                            fill="none"
+                            stroke="#DC2626"
+                            strokeWidth="2.5"
+                          />
+                        )}
+
+                        <circle
+                          r={nodeRadius}
+                          className={`${roleColor}`}
+                          strokeWidth={isSelected ? '2.5' : '1.5'}
+                          stroke={isSelected || isNodeOnCycle ? (isNodeOnCycle ? '#DC2626' : '#18181B') : undefined}
                         />
 
                         {/* Node Icon backdrop */}
