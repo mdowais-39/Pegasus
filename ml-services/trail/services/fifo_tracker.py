@@ -60,6 +60,12 @@ class FIFOTracker:
             elif direction == "DEBIT":
                 remaining_debit = amount
                 dest = resolve_counterparty(txn.get("narration"))
+                debit_location = None
+                if is_cash_narration(txn.get("narration")):
+                    loc = parse_location(txn.get("narration"))
+                    if loc["location"]["city"] != "Unknown":
+                        debit_location = loc["location"]
+                entries_this_debit = []          # consumed entries produced by THIS debit
                 while remaining_debit > 1e-9 and open_lots:
                     lot = open_lots[0]
                     take = min(remaining_debit, lot["remaining"])
@@ -70,18 +76,16 @@ class FIFOTracker:
                         "time": txn.get("time"),
                         "amount": round(take, 2),          # portion traced to THIS credit
                         "debit_total": round(amount, 2),   # full debit-transaction amount
-                        "leftover": round(amount - take, 2),  # rest of the debit (other sources)
+                        "untraced": 0.0,                   # set below iff the debit overshoots ALL lots
                         "destination": dest,
                         "narration": txn.get("narration"),
                         "reference_number": txn.get("reference_number"),
                         "balance": txn.get("balance"),
                     }
-                    # ATM / cash-out physical location, when this debit is a withdrawal
-                    if is_cash_narration(txn.get("narration")):
-                        loc = parse_location(txn.get("narration"))
-                        if loc["location"]["city"] != "Unknown":
-                            consumed["location"] = loc["location"]
+                    if debit_location:
+                        consumed["location"] = debit_location
                     trail["consumed_by"].append(consumed)
+                    entries_this_debit.append(consumed)
                     trail["spent"] = round(trail["spent"] + take, 2)
                     trail["remaining"] = round(trail["remaining"] - take, 2)
                     lot["remaining"] -= take
@@ -89,6 +93,13 @@ class FIFOTracker:
                     if lot["remaining"] <= 1e-9:
                         trail["fully_traced"] = True
                         open_lots.pop(0)
+
+                # Whatever the debit could NOT draw from any open credit lot was
+                # spent from untracked money (opening balance / credits outside
+                # this window). Attribute it to this debit's last entry so the
+                # trail can show "Rs X left / from untracked sources".
+                if remaining_debit > 1e-9 and entries_this_debit:
+                    entries_this_debit[-1]["untraced"] = round(remaining_debit, 2)
 
         return [trails[i] for i in sorted(trails)]
 

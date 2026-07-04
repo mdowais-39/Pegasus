@@ -199,18 +199,24 @@ def _money_trail_doc(case_id):
             for c in tr.get("consumed_by", []) or []:
                 narr = c.get("narration") or ""
                 dest = c.get("destination") or narr[:30]
-                traced = c.get("amount")
-                leftover = c.get("leftover") or 0
+                traced = c.get("amount") or 0
+                total = c.get("debit_total") or traced
+                untraced = c.get("untraced") or 0
                 details = f"-> {dest}  {narr}".strip()
-                if leftover and leftover > 0.01:
-                    details += (f"  [traced {_money(traced)} of this credit; "
-                                f"{_money(leftover)} left, funded from other sources]")
+                if untraced and untraced > 0.01:
+                    details += (f"  [of the full {_money(total)} debit, "
+                                f"{_money(untraced)} was spent from untracked funds]")
+                elif total and total > traced + 0.01:
+                    details += (f"  [part of a {_money(total)} debit (ref "
+                                f"{c.get('reference_number') or 'n/a'}) split across multiple credits]")
+                # Debit column shows the amount TRACED to this credit (matches the
+                # money-trail investigation), not the full multi-credit debit.
                 ledger_rows.append([
                     f"  Debit #{trail_no}",
                     c.get("date"), c.get("time"), c.get("date"),
                     details,
                     c.get("reference_number") or "",
-                    _money(c.get("debit_total")), "", _money(c.get("balance")),
+                    _money(traced), "", _money(c.get("balance")),
                     _cash_loc(narr),
                 ])
 

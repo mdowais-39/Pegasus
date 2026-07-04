@@ -531,10 +531,10 @@ export default function MoneyTrailPage() {
                               <span className="text-[9px] text-[#C2410C] font-bold uppercase font-mono tracking-wider">Traced Outflow</span>
                               <strong className="font-bold text-zinc-950 font-mono">{formatCurrency(amt)}</strong>
                             </div>
-                            {node.leftover != null && node.leftover > 0.01 && (
+                            {node.untraced != null && node.untraced > 0.01 && (
                               <div className="flex items-center justify-between text-[9px] font-mono">
-                                <span className="text-[#71717A]">Left of ₹{(node.debit_total || 0).toLocaleString('en-IN')} debit</span>
-                                <span className="font-bold text-amber-700">{formatCurrency(node.leftover)} left</span>
+                                <span className="text-[#71717A]">Of ₹{(node.debit_total || 0).toLocaleString('en-IN')} debit</span>
+                                <span className="font-bold text-amber-700">{formatCurrency(node.untraced)} untracked</span>
                               </div>
                             )}
                           </div>
@@ -603,11 +603,15 @@ export default function MoneyTrailPage() {
                           <p className="text-[10px] text-[#71717A] mt-1 font-light leading-relaxed">
                             Chronologically charged against credit trigger volume at proportion ratio of <strong className="font-bold text-zinc-800 font-mono">{formatPercent(amt, srcAmt)}</strong>.
                           </p>
-                          {node.leftover != null && node.leftover > 0.01 && (
+                          {node.untraced != null && node.untraced > 0.01 ? (
                             <p className="text-[10px] mt-1 font-mono bg-amber-50 border border-amber-200 rounded px-1.5 py-1 text-amber-800">
-                              This debit was <strong>{formatCurrency(node.debit_total || 0)}</strong> — only {formatCurrency(amt)} traced to this credit; <strong>{formatCurrency(node.leftover)} left</strong> (funded from other sources).
+                              This debit was <strong>{formatCurrency(node.debit_total || 0)}</strong> — {formatCurrency(amt)} traced to this credit; <strong>{formatCurrency(node.untraced)} spent from untracked funds</strong>.
                             </p>
-                          )}
+                          ) : (node.debit_total != null && node.debit_total > amt + 0.01 && (
+                            <p className="text-[10px] mt-1 font-mono text-[#71717A]">
+                              Part of a <strong className="text-zinc-800">{formatCurrency(node.debit_total)}</strong> debit split across multiple credits ({formatCurrency(amt)} from this credit).
+                            </p>
+                          ))}
                           <p className="text-[8.5px] text-[#A1A1AA] mt-0.5 font-mono truncate" title={node.debit_txn_id}>
                             Tx ID: {node.debit_txn_id}
                           </p>

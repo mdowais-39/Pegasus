@@ -153,7 +153,7 @@ export interface MoneyTrailResponse {
       debit_txn_id?: string;
       amount?: number;
       debit_total?: number;
-      leftover?: number;
+      untraced?: number;
       time?: string | null;
       reference_number?: string | null;
       balance?: number | null;
