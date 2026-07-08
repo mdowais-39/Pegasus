@@ -26,3 +26,24 @@ Designed using tailored HSL color tokens for seamless alpha transparency overlay
 *   **Glassmorphism Panels:** Main cards use semi-transparent backdrops (`background: rgba(15, 15, 20, 0.65)`) with a backdrop blur filter (`backdrop-filter: blur(12px)`) and thin, light-emitting borders (`border: 1px solid rgba(255, 255, 255, 0.08)`).
 *   **Emulated Window Controls:** Interactive cards and workspace modules feature a macOS-style window controls header (trio of flat red, yellow, and green circular dots) to convey a native application workspace feel.
 *   **Micro-Animations:** Clean CSS transitions (`transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1)`) applied to hover states, sidebar links, list items, and upload dropzones for fluid visual response.
+
+---
+
+## 🧭 Routing Schema & Workspace Layout
+
+The application's client-side routing is declared inside [App.tsx](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE/AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/App.tsx) using `react-router-dom` v6. 
+
+### 1. Main Navigation Hierarchy
+*   **Public Portal Landing:** `/` — Interactive promotional entry point demonstrating the platform value and core capabilities.
+*   **Identity Verification:** `/login` — Secure entry point to authenticate investigators and load workspace states.
+*   **Investigator Workspace:** `/workspace` — The central, authenticated dashboard layout. All core analytical views render inside the `/workspace` layout container.
+
+### 2. Workspace Subpages (Sub-routes)
+Nested within the [WorkspaceLayout](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE/AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/components/WorkspaceLayout.tsx) layout shell:
+*   **Overview Dashboard:** `/workspace` — Ingestion dropzone, active statements list, active case info, and system health status monitor.
+*   **Round-Trips Analysis:** `/workspace/round-trips` — Displays detected circular-flow/layering loops with path lengths, transaction logs, and LLM-generated narrative summaries.
+*   **Money-Flow Graph:** `/workspace/money-flow` — Force-directed entity-relationship network visualizer showing cash accumulation, layering, and transfer pipelines.
+*   **Money-Trail Tracking:** `/workspace/money-trail` — Traces credit deposits down to their component debits in sequence using FIFO flow tracking.
+*   **Investigation Reports:** `/workspace/reports` — Generate, customize, email, or download full-scale DOCX, PDF, and Excel reports.
+*   **System Settings:** `/workspace/settings` — Configure database connection strings, model parameters, API endpoints, and clean mock databases.
+
