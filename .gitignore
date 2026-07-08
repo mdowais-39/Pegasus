@@ -238,3 +238,9 @@ build/
 *.seed
 *.pid
 *.pid.lock
+
+# ==========================================================
+# Ignored Project Documentation
+# ==========================================================
+/API_CONTRACT.md
+/API_CONTRACTS.md
