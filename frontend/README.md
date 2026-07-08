@@ -1,10 +1,10 @@
-# 🕵️ FinIntel Investigator Workspace — Frontend Developer Documentation
+# FinIntel Investigator Workspace — Frontend Developer Documentation
 
 This document provides a comprehensive overview of the **FinIntel React Frontend**, including its visual design system, layout standards, routing structure, state management, API integration, and user workflows.
 
 ---
 
-## 🎨 Visual Design System & Aesthetics
+## Visual Design System & Aesthetics
 
 The FinIntel Investigator Workspace uses a bespoke, premium **dark theme** optimized for law enforcement officers and forensic analysts who require high scannability during long investigation sessions.
 
@@ -29,7 +29,7 @@ Designed using tailored HSL color tokens for seamless alpha transparency overlay
 
 ---
 
-## 🧭 Routing Schema & Workspace Layout
+## Routing Schema & Workspace Layout
 
 The application's client-side routing is declared inside [App.tsx](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE/AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/App.tsx) using `react-router-dom` v6. 
 
@@ -49,7 +49,7 @@ Nested within the [WorkspaceLayout](file:///C:/Users/Willis/OneDrive/Documents/H
 
 ---
 
-## ⚡ Global State Management & API Integration
+## Global State Management & API Integration
 
 ### 1. Unified Client-Side Data Context
 Global application state is managed by the React Context API declared in [FinintelDataContext.tsx](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE\AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/context/FinintelDataContext.tsx) and accessed via the custom hook `useFinintelData()`.
@@ -68,7 +68,7 @@ All HTTP calls are encapsulated in [finintelApi.ts](file:///C:/Users/Willis/OneD
 
 ---
 
-## 🔍 Investigator Workflows & Wireframe Flow
+## Investigator Workflows & Wireframe Flow
 
 ### 1. Typical Forensics Ingestion Loop
 1.  **Statement Upload:** The investigator navigates to `/workspace` and drags scanned bank statements into the dropzone.
@@ -83,7 +83,7 @@ Below is the visual structure of the workspace layout shell:
 
 ```
 +------------------------------------------------------------------------------------+
-| 🕵️ FinIntel  [Case: #01-A9]               [Status: Connected]  [User: Willis]      |
+| FinIntel  [Case: #01-A9]               [Status: Connected]  [User: Willis]      |
 +------------------------------------------------------------------------------------+
 |  Navigation   |  Workspace Panel (Active analytical view container)                 |
 |  -----------  |  --------------------------------------------------                 |

@@ -22,25 +22,25 @@ Built for law-enforcement & bank fraud-investigation teams. Designed so a non-te
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
-1. [Overview](#-overview)
-2. [Key Features](#-key-features)
-3. [Architecture](#-architecture)
-4. [Tech Stack](#-tech-stack)
-5. [Repository Structure](#-repository-structure)
-6. [Prerequisites](#-prerequisites)
-7. [Setup & Installation](#-setup--installation)
-8. [Running the Project](#-running-the-project)
-9. [Docker Setup & Execution](#-docker-setup--execution)
-10. [Environment Variables Reference](#-environment-variables-reference)
-11. [API Access](#-api-access)
-12. [Testing](#-testing)
-13. [Troubleshooting](#-troubleshooting)
+1. [Overview](#overview)
+2. [Key Features](#key-features)
+3. [Architecture](#architecture)
+4. [Tech Stack](#tech-stack)
+5. [Repository Structure](#repository-structure)
+6. [Prerequisites](#prerequisites)
+7. [Setup & Installation](#setup--installation)
+8. [Running the Project](#running-the-project)
+9. [Docker Setup & Execution](#docker-setup--execution)
+10. [Environment Variables Reference](#environment-variables-reference)
+11. [API Access](#api-access)
+12. [Testing](#testing)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🎯 Overview
+## Overview
 
 **FinIntel** ingests scanned/PDF/CSV/Excel bank statements — including messy, unstructured, real-world formats — and turns them into a full financial-crime investigation workspace:
 
@@ -58,22 +58,22 @@ Built for law-enforcement & bank fraud-investigation teams. Designed so a non-te
 
 The product is built to be **visual-first**: badges over raw numbers, colour-coded severity, and graphs/timelines that a non-technical investigating officer can read at a glance — not a data-science dashboard.
 
-## ✨ Key Features
+## Key Features
 
 | Category | What it does |
 |---|---|
-| 📥 **Ingestion** | Upload PDF/scanned/CSV/Excel statements → OCR → standardize → validate, with duplicate/failed-transaction detection and a confidence score per row |
-| 🕸️ **Money-Flow Graph** | Interactive, pannable/zoomable graph of the transaction network with node identity (holder, bank, IFSC), activity windows, channel-coloured edges, and an enlarge/full-screen mode |
-| 🔁 **Round-Trip Detection** | Finds circular money chains (A → B → C → A) with per-hop amounts and bottleneck/total value |
-| 🏃 **Rapid Pass-Through** | Flags accounts where inbound funds are drained out almost immediately (velocity gauge) |
-| 🧵 **Money Trail (FIFO)** | Every credit traced FIFO to the debits that spent it, with per-debit destination, channel, cash location, and correct "untracked" remainder math for multi-credit-split debits |
-| 📍 **Cash/ATM Location Mapping** | Deterministic parser (no LLM — instant, offline, reproducible) extracts city/state/time from ATM & cash narrations |
-| 🏷️ **Malicious-Activity Tags** | Plain-language badges (Circular Flow, Rapid Pass-Through, Accumulation, Layering, Collector, Distributor, Anomaly…) instead of raw scores |
-| 🔔 **Alerts** | Balanced-sensitivity alerting (HIGH/CRITICAL accounts + any round-trip/pass-through) via bell, toast, and panel |
-| 📊 **Reports** | Combined case report *and* per-service reports (Round Trips / Money Flow / Money Trail), each in PDF, Excel, and DOCX, scoped to one statement or the whole network, plus email delivery |
-| 🌐 **Whole-Network View** | Aggregate analysis across every uploaded statement, with a "representative" risk-ranking algorithm so smaller statements aren't buried by larger ones |
+| **Ingestion** | Upload PDF/scanned/CSV/Excel statements → OCR → standardize → validate, with duplicate/failed-transaction detection and a confidence score per row |
+| **Money-Flow Graph** | Interactive, pannable/zoomable graph of the transaction network with node identity (holder, bank, IFSC), activity windows, channel-coloured edges, and an enlarge/full-screen mode |
+| **Round-Trip Detection** | Finds circular money chains (A → B → C → A) with per-hop amounts and bottleneck/total value |
+| **Rapid Pass-Through** | Flags accounts where inbound funds are drained out almost immediately (velocity gauge) |
+| **Money Trail (FIFO)** | Every credit traced FIFO to the debits that spent it, with per-debit destination, channel, cash location, and correct "untracked" remainder math for multi-credit-split debits |
+| **Cash/ATM Location Mapping** | Deterministic parser (no LLM — instant, offline, reproducible) extracts city/state/time from ATM & cash narrations |
+| **Malicious-Activity Tags** | Plain-language badges (Circular Flow, Rapid Pass-Through, Accumulation, Layering, Collector, Distributor, Anomaly…) instead of raw scores |
+| **Alerts** | Balanced-sensitivity alerting (HIGH/CRITICAL accounts + any round-trip/pass-through) via bell, toast, and panel |
+| **Reports** | Combined case report *and* per-service reports (Round Trips / Money Flow / Money Trail), each in PDF, Excel, and DOCX, scoped to one statement or the whole network, plus email delivery |
+| **Whole-Network View** | Aggregate analysis across every uploaded statement, with a "representative" risk-ranking algorithm so smaller statements aren't buried by larger ones |
 
-## 🏗️ Architecture
+## Architecture
 
 ```
                                    ┌──────────────────────────┐
@@ -113,7 +113,7 @@ The product is built to be **visual-first**: badges over raw numbers, colour-cod
 - **ML microservices (Python/FastAPI)** are stateless — each rebuilds whatever it needs from Postgres per request. The Graph service memoizes expensive whole-network computations in an `analysis_cache` table, invalidated automatically on every new upload.
 - **`case_id` scoping**: `"all"` = whole-network aggregate across every statement; a statement UUID = strictly isolated single-statement view. Both are supported end-to-end (analysis, graphs, reports).
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -123,7 +123,7 @@ The product is built to be **visual-first**: badges over raw numbers, colour-cod
 | Frontend | React 19, TypeScript, Vite 6, Tailwind CSS 4, lucide-react, Express (dev/preview server) |
 | Infra (optional) | Docker / Docker Compose |
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 Bank_Hackathon/
@@ -154,7 +154,7 @@ Bank_Hackathon/
 └── requirements-working.txt # pip freeze of the working Python environment
 ```
 
-## ✅ Prerequisites
+## Prerequisites
 
 Install these before you start:
 
@@ -169,7 +169,7 @@ Install these before you start:
 
 > **Note on Neo4j:** `docker-compose.yml` also defines a Neo4j container. It is a **legacy/optional** dependency — the current graph & risk-analysis pipeline is fully Postgres-driven and in-memory (Neo4j-independent). You do not need to start it for the product to work.
 
-## 🚀 Setup & Installation
+## Setup & Installation
 
 ### 1. Clone the repository
 
@@ -247,7 +247,7 @@ npm install
 cd ..
 ```
 
-## ▶️ Running the Project
+## Running the Project
 
 ### Fastest path — one command starts everything
 
@@ -321,7 +321,7 @@ Add `--reload` to any `uvicorn` command for hot-reload during development (the `
 | Trail | http://localhost:8009 |
 | Report | http://localhost:8010 |
 
-## 🐳 Docker Setup & Execution
+## Docker Setup & Execution
 
 Today, **Docker is used for infrastructure** (PostgreSQL, and an optional legacy Neo4j) — the gateway, ML services, and frontend run natively as described above for fastest local iteration and full GPU/OCR access. `docker-compose.yml` at the repo root:
 
@@ -386,7 +386,7 @@ There are no Dockerfiles for the gateway/ML services/frontend in this repo yet (
 - **Frontend:** `node:22-slim` build stage (`npm run build`) → `npm run start` (serves the built app via the bundled Express server) or serve the static `dist/` via nginx.
 - Add each as a service in `docker-compose.yml`, put them on the same Docker network, and swap every `*_URL`/`DATABASE_URL` `localhost` reference for the corresponding compose service name.
 
-## 🔧 Environment Variables Reference
+## Environment Variables Reference
 
 All variables are optional with working `localhost` defaults for local development — only set what you need to override.
 
@@ -422,7 +422,7 @@ Graph/Trail/Report services also read `GRAPH_URL` / `TRAIL_URL` (same defaults a
 
 The gateway base URL defaults to `http://localhost:8080` and can be changed at runtime from the in-app **Settings** page — no rebuild required. An optional `GEMINI_API_KEY` enables an AI-copilot demo feature in `frontend/server.ts`; the app runs fully without it.
 
-## 📚 API Access
+## API Access
 
 The gateway exposes a single, uniformly-enveloped REST API (`{ success, data, error, meta }` on every response):
 
@@ -432,7 +432,7 @@ The gateway exposes a single, uniformly-enveloped REST API (`{ success, data, er
 
 See [`API_CONTRACT.md`](API_CONTRACT.md) for the full endpoint contract and [`BACKEND_EXPLAINED.md`](BACKEND_EXPLAINED.md) for a deep dive into every microservice's algorithms.
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Rust
@@ -447,11 +447,7 @@ cd ml-services/trail && python -m pytest
 cd ml-services/ocr   && python -m pytest
 ```
 
-## 🛠️ Troubleshooting
-
-- **`cargo run` fails to connect to Postgres** — confirm the container/service is up (`docker compose ps` or check your native Postgres service) and `DATABASE_URL` is correct.
-- **A Python service won't start / import errors** — make sure the `finintel` conda env is activated in that terminal; the report service also needs `pip install reportlab` (not in the exported environment file).
-- **Uploading a statement never finishes** — check `http://localhost:8080/services/health`; if any ML service shows unhealthy, start it (see [Running the Project](#-running-the-project)).
+- **Uploading a statement never finishes** — check `http://localhost:8080/services/health`; if any ML service shows unhealthy, start it (see [Running the Project](#running-the-project)).
 - **`.env` changes don't seem to apply** — `uvicorn --reload` watches `.py` files only, not `.env`. Fully restart the affected service after editing its `.env`.
 - **Report emails fail with a TLS/SSL error** — some corporate VPN/Zero-Trust clients (e.g. Cloudflare WARP) intercept and break TLS handshakes for certain OpenSSL builds. If this happens, try disabling the VPN/proxy for the report service's outbound traffic, or switch `SMTP_PORT`/`SMTP_USE_TLS` between `465`/SSL and `587`/STARTTLS in `ml-services/report/.env` (then restart the service) — the service already retries automatically across both transports.
 - **Whole-network view looks incomplete right after an upload** — whole-network results are cached (`analysis_cache`) and refreshed automatically when a new statement finishes processing; give the background job a moment to complete (watch the alert bell / job status).
