@@ -66,4 +66,44 @@ All HTTP calls are encapsulated in [finintelApi.ts](file:///C:/Users/Willis/OneD
     3.  The frontend initiates a polling loop using `getJobStatus(jobId)` to track progress in real-time.
     4.  Once the job status changes to `completed`, the context triggers a refresh of the transaction logs.
 
+---
+
+## 🔍 Investigator Workflows & Wireframe Flow
+
+### 1. Typical Forensics Ingestion Loop
+1.  **Statement Upload:** The investigator navigates to `/workspace` and drags scanned bank statements into the dropzone.
+2.  **Visual Processing Queue:** The UI displays a card list showing processing status (OCR Parsing ➔ Schema Standardization ➔ Entity Resolution).
+3.  **Risk Summary Load:** Once processing completes, high-risk scores trigger warnings on the overview panel.
+4.  **Loop & Mule Detection:** The investigator shifts to `/workspace/round-trips` to view circular money-layering loops identified by the Neo4j depth-first-search engine.
+5.  **FIFO Money Trail Tracing:** The investigator clicks on any suspicious credit transaction to open the `/workspace/money-trail` panel and trace the source of funds down to its debit distribution.
+6.  **One-Click Report Generation:** Finally, the investigator goes to `/workspace/reports` and clicks "Generate Case File" to create a court-ready DOCX/PDF report.
+
+### 2. Workspace Layout Wireframe
+Below is the visual structure of the workspace layout shell:
+
+```
++------------------------------------------------------------------------------------+
+| 🕵️ FinIntel  [Case: #01-A9]               [Status: Connected]  [User: Willis]      |
++------------------------------------------------------------------------------------+
+|  Navigation   |  Workspace Panel (Active analytical view container)                 |
+|  -----------  |  --------------------------------------------------                 |
+|               |  +--------------------------------------------------------------+   |
+|  [ Dashboard ]|  | Ingestion Dropzone (drag scanned statements here)            |   |
+|               |  | [ Drop files to ingest ]                                     |   |
+|  [ Rd Trips ] |  +--------------------------------------------------------------+   |
+|               |                                                                     |
+|  [ Money Flw ]|  +---------------------------+  +-------------------------------+   |
+|               |  | Active Statements         |  | Active System Health Pipeline |   |
+|  [ FIFO Trls ]|  | - statement_sbi.pdf (OK)  |  | - Gateway: Online             |   |
+|               |  | - statement_hdfc.csv (OK) |  | - OCR Parser: Idle            |   |
+|  [ Reports ]  |  +---------------------------+  +-------------------------------+   |
+|               |                                                                     |
+|  [ Settings ] |  +--------------------------------------------------------------+   |
+|               |  | Alert Center                                                 |   |
+|               |  | - WARN: Accumulation point found on Account SBI-2038         |   |
+|               |  +--------------------------------------------------------------+   |
++---------------+--------------------------------------------------------------------+
+```
+
+
 
