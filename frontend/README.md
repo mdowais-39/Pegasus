@@ -47,3 +47,23 @@ Nested within the [WorkspaceLayout](file:///C:/Users/Willis/OneDrive/Documents/H
 *   **Investigation Reports:** `/workspace/reports` — Generate, customize, email, or download full-scale DOCX, PDF, and Excel reports.
 *   **System Settings:** `/workspace/settings` — Configure database connection strings, model parameters, API endpoints, and clean mock databases.
 
+---
+
+## ⚡ Global State Management & API Integration
+
+### 1. Unified Client-Side Data Context
+Global application state is managed by the React Context API declared in [FinintelDataContext.tsx](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE\AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/context/FinintelDataContext.tsx) and accessed via the custom hook `useFinintelData()`.
+
+*   **Context Scope:** Manages statement metadata lists, actively selected transactions, current case parameters, report configurations, backend endpoint configuration, and ingestion job polling queues.
+*   **Active Statement Hydration:** Triggers automated UI-wide refreshes when statements are deleted, uploaded, or completed, ensuring consistent visualizations across the money flow network graph and FIFO trails.
+
+### 2. API Communication Layer
+All HTTP calls are encapsulated in [finintelApi.ts](file:///C:/Users/Willis/OneDrive/Documents/Hackathons/CIDECODE/AI-Powered-Financial-Crime-Investigation-Platform/frontend/src/services/finintelApi.ts).
+
+*   **Async Ingestion Flow:** When a document is dragged into the dropzone:
+    1.  `uploadStatement()` sends the file to the backend gateway `/statements/upload`.
+    2.  The gateway returns a unique background job UUID.
+    3.  The frontend initiates a polling loop using `getJobStatus(jobId)` to track progress in real-time.
+    4.  Once the job status changes to `completed`, the context triggers a refresh of the transaction logs.
+
+
