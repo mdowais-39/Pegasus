@@ -2,7 +2,9 @@
 
 import io
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, Inches
+
+from services import chart_images
 
 
 def _heading(doc, text, level=1):
@@ -28,6 +30,65 @@ def _table(doc, headers, rows):
         cells = table.add_row().cells
         for i, val in enumerate(r):
             cells[i].text = "" if val is None else str(val)
+
+
+def _add_png(doc, png: bytes, width_in=5.6):
+    if not png:
+        return
+    doc.add_picture(io.BytesIO(png), width=Inches(width_in))
+
+
+def _channel_section(doc, report):
+    """Payment-channel & category analytics with pie / bar / velocity charts.
+    Charts embed when matplotlib is available; the data tables always render."""
+    cats = report.get("category_counts") or {}
+    channels = report.get("channel_breakdown") or []
+    timeline = report.get("activity_timeline") or []
+    if not channels and not cats:
+        return
+
+    _heading(doc, "Transaction Channels & Categories")
+
+    # headline category tiles as a compact table
+    if cats:
+        label_map = [
+            ("total_transactions", "Total Transactions"),
+            ("credits", "Credits"), ("debits", "Debits"),
+            ("atm_withdrawals", "ATM Withdrawals"),
+            ("cash_deposits", "Cash Deposits"),
+            ("failed_transactions", "Failed / Reversed"),
+            ("digital_upi", "Digital (UPI/apps)"),
+            ("cheque", "Cheque"), ("card_pos", "Card / POS"),
+        ]
+        _table(doc, ["Category", "Count"],
+               [[lbl, cats.get(key, 0)] for key, lbl in label_map])
+
+    # class-wise counts (BLKRTGS / NEFT / Paytm / ...) + share
+    if channels:
+        _heading(doc, "Class-wise Transaction Counts", level=2)
+        _table(
+            doc, ["Channel / Class", "Transactions", "Total Value (₹)", "Share"],
+            [[c.get("channel"), c.get("count"), f"{c.get('value', 0):,.0f}",
+              f"{round((c.get('share') or 0) * 100)}%"] for c in channels],
+        )
+        labels = [c["channel"] for c in channels]
+        counts = [c["count"] for c in channels]
+        _add_png(doc, chart_images.pie_png(labels, counts,
+                                           "Transaction Share by Channel"))
+        _add_png(doc, chart_images.bar_png(labels, counts,
+                                           "Transactions per Channel/Class",
+                                           xlabel="Transactions"))
+
+    # fund velocity over time
+    if timeline:
+        _heading(doc, "Fund Velocity Over Time", level=2)
+        _add_png(doc, chart_images.timeline_png(
+            [t["date"] for t in timeline],
+            [t["count"] for t in timeline],
+            [t["credit"] for t in timeline],
+            [t["debit"] for t in timeline],
+            "Transaction Volume & Fund Movement",
+        ))
 
 
 def build_docx(report: dict) -> bytes:
@@ -62,6 +123,8 @@ def build_docx(report: dict) -> bytes:
             [[dist.get("CRITICAL", 0), dist.get("HIGH", 0),
               dist.get("MEDIUM", 0), dist.get("LOW", 0)]],
         )
+
+    _channel_section(doc, report)
 
     val = report.get("validation")
     if val:

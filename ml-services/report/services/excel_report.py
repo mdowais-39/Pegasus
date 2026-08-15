@@ -3,6 +3,7 @@
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.chart import PieChart, BarChart, LineChart, Reference
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -25,6 +26,100 @@ def _autosize(ws):
     for col in ws.columns:
         width = max((len(str(c.value)) for c in col if c.value is not None), default=10)
         ws.column_dimensions[col[0].column_letter].width = min(60, width + 2)
+
+
+def _channels_sheet(wb, report):
+    """Channel/category counts + native Excel pie, bar and velocity charts."""
+    channels = report.get("channel_breakdown") or []
+    cats = report.get("category_counts") or {}
+    timeline = report.get("activity_timeline") or []
+    if not channels and not cats:
+        return
+
+    ws = _sheet(wb, "Channels & Categories")
+
+    # headline category counts
+    ws["A1"] = "Category Counts"
+    ws["A1"].font = _TITLE_FONT
+    _header_row(ws, ["Category", "Count"], row=2)
+    label_map = [
+        ("total_transactions", "Total Transactions"),
+        ("credits", "Credits"), ("debits", "Debits"),
+        ("atm_withdrawals", "ATM Withdrawals"), ("cash_deposits", "Cash Deposits"),
+        ("failed_transactions", "Failed / Reversed"),
+        ("digital_upi", "Digital (UPI/apps)"), ("cheque", "Cheque"),
+        ("card_pos", "Card / POS"),
+    ]
+    r = 3
+    for key, lbl in label_map:
+        ws.cell(row=r, column=1, value=lbl)
+        ws.cell(row=r, column=2, value=cats.get(key, 0))
+        r += 1
+
+    # class-wise channel table (anchored so charts can reference it)
+    ch_hdr = r + 1
+    ws.cell(row=ch_hdr, column=1, value="Class-wise Transaction Counts").font = _TITLE_FONT
+    ch_hdr += 1
+    _header_row(ws, ["Channel / Class", "Transactions", "Total Value"], row=ch_hdr)
+    first = ch_hdr + 1
+    row = first
+    for c in channels:
+        ws.cell(row=row, column=1, value=c.get("channel"))
+        ws.cell(row=row, column=2, value=c.get("count"))
+        ws.cell(row=row, column=3, value=c.get("value"))
+        row += 1
+    last = row - 1
+    _autosize(ws)
+
+    if channels and last >= first:
+        cats_ref = Reference(ws, min_col=1, min_row=first, max_row=last)
+        cnt_ref = Reference(ws, min_col=2, min_row=ch_hdr, max_row=last)  # incl header
+
+        pie = PieChart()
+        pie.title = "Transaction Share by Channel"
+        pie.add_data(cnt_ref, titles_from_data=True)
+        pie.set_categories(cats_ref)
+        pie.height, pie.width = 8, 13
+        ws.add_chart(pie, "E2")
+
+        bar = BarChart()
+        bar.type = "bar"
+        bar.title = "Transactions per Channel/Class"
+        bar.add_data(cnt_ref, titles_from_data=True)
+        bar.set_categories(cats_ref)
+        bar.legend = None
+        bar.height, bar.width = 8, 13
+        ws.add_chart(bar, "E19")
+
+    # fund-velocity timeline on its own sheet (dates can be many)
+    if timeline:
+        tw = _sheet(wb, "Fund Velocity")
+        _header_row(tw, ["Date", "Txn Count", "Credit", "Debit"], row=1)
+        for i, t in enumerate(timeline, start=2):
+            tw.cell(row=i, column=1, value=t.get("date"))
+            tw.cell(row=i, column=2, value=t.get("count"))
+            tw.cell(row=i, column=3, value=t.get("credit"))
+            tw.cell(row=i, column=4, value=t.get("debit"))
+        _autosize(tw)
+        n = len(timeline) + 1
+        dates_ref = Reference(tw, min_col=1, min_row=2, max_row=n)
+
+        line = LineChart()
+        line.title = "Fund Movement Over Time (Credit vs Debit)"
+        line.add_data(Reference(tw, min_col=3, max_col=4, min_row=1, max_row=n),
+                      titles_from_data=True)
+        line.set_categories(dates_ref)
+        line.height, line.width = 9, 18
+        tw.add_chart(line, "F2")
+
+        vol = BarChart()
+        vol.title = "Transaction Count Over Time"
+        vol.add_data(Reference(tw, min_col=2, min_row=1, max_row=n),
+                     titles_from_data=True)
+        vol.set_categories(dates_ref)
+        vol.legend = None
+        vol.height, vol.width = 9, 18
+        tw.add_chart(vol, "F21")
 
 
 def build_excel(report: dict) -> bytes:
@@ -132,6 +227,9 @@ def build_excel(report: dict) -> bytes:
         ws.append([a.get("node"), a.get("total_in"), a.get("total_out"),
                    round((a.get("passthrough_ratio") or 0) * 100)])
     _autosize(ws)
+
+    # --- Channels & Categories (with native charts) ---
+    _channels_sheet(wb, report)
 
     # --- Cash Locations ---
     cash = report.get("cash_locations", [])

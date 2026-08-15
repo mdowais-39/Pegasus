@@ -12,6 +12,7 @@ import urllib.request
 from services.postgres_loader import PostgresLoader
 from services.location_parser import parse_location
 from services import persistence
+from services import channel_analytics
 
 GRAPH_URL = os.getenv("GRAPH_URL", "http://localhost:8005")
 
@@ -43,6 +44,8 @@ class ReportBuilder:
         validation = self.loader.validation_summary(stmt)
         entities = self.loader.top_entities(25)
         cash_locations = self._cash_locations(stmt)
+        analytics = channel_analytics.compute(
+            self.loader.transactions_for_analytics(stmt))
 
         # Risk + flow must follow the SAME scope as the counts above:
         #  - scoped: this statement's transactions only.
@@ -98,6 +101,9 @@ class ReportBuilder:
             "top_risks": top_risks,
             "top_entities": entities,
             "cash_locations": cash_locations,
+            "channel_breakdown": analytics["channel_breakdown"],
+            "category_counts": analytics["categories"],
+            "activity_timeline": analytics["timeline"],
             "validation": validation,
             "recommendations": self._recommendations(mf, round_trips, top_risks, validation),
         }

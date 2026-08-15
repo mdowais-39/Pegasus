@@ -219,6 +219,62 @@ def build_pdf(report: dict) -> bytes:
         ))
         flow.append(Spacer(1, 8))
 
+    # -------------------------------------------- channels & categories + charts
+    from reportlab.platypus import Image as RLImage
+    from services import chart_images
+
+    channels = report.get("channel_breakdown", []) or []
+    cats = report.get("category_counts", {}) or {}
+    timeline = report.get("activity_timeline", []) or []
+    if channels or cats:
+        flow.append(Paragraph("Transaction Channels & Categories", h2))
+        if cats:
+            label_map = [
+                ("total_transactions", "Total Transactions"),
+                ("credits", "Credits"), ("debits", "Debits"),
+                ("atm_withdrawals", "ATM Withdrawals"),
+                ("cash_deposits", "Cash Deposits"),
+                ("failed_transactions", "Failed / Reversed"),
+                ("digital_upi", "Digital (UPI/apps)"),
+                ("cheque", "Cheque"), ("card_pos", "Card / POS"),
+            ]
+            flow.append(make_table(
+                ["Category", "Count"],
+                [[lbl, cats.get(key, 0)] for key, lbl in label_map],
+                [3, 1], right_cols=(1,),
+            ))
+            flow.append(Spacer(1, 6))
+
+        if channels:
+            flow.append(Paragraph("Class-wise Transaction Counts", h2))
+            flow.append(make_table(
+                ["Channel / Class", "Transactions", "Total Value", "Share"],
+                [[c.get("channel"), c.get("count"), _inr(c.get("value")),
+                  f"{round((c.get('share') or 0) * 100)}%"] for c in channels],
+                [2.5, 1.5, 2.0, 1.0], right_cols=(1, 2, 3),
+            ))
+            flow.append(Spacer(1, 6))
+
+            labels = [c["channel"] for c in channels]
+            counts = [c["count"] for c in channels]
+            for png in (chart_images.pie_png(labels, counts, "Share by Channel"),
+                        chart_images.bar_png(labels, counts, "Transactions per Channel")):
+                if png:
+                    flow.append(RLImage(io.BytesIO(png), width=avail * 0.72,
+                                        height=avail * 0.72 * 0.62))
+                    flow.append(Spacer(1, 4))
+
+        if timeline:
+            png = chart_images.timeline_png(
+                [t["date"] for t in timeline], [t["count"] for t in timeline],
+                [t["credit"] for t in timeline], [t["debit"] for t in timeline],
+                "Fund Velocity Over Time")
+            if png:
+                flow.append(Paragraph("Fund Velocity Over Time", h2))
+                flow.append(RLImage(io.BytesIO(png), width=avail,
+                                    height=avail * 0.46))
+        flow.append(Spacer(1, 8))
+
     # ------------------------------------------------------- cash locations
     cash = report.get("cash_locations", [])[:30]
     if cash:
