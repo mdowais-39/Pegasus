@@ -219,10 +219,45 @@ def build_pdf(report: dict) -> bytes:
         ))
         flow.append(Spacer(1, 8))
 
-    # -------------------------------------------- channels & categories + charts
+    # -------------------------------------------------- investigation analytics
     from reportlab.platypus import Image as RLImage
     from services import chart_images
 
+    def _chart_img(png, wfrac=0.72, hratio=0.62):
+        if png:
+            flow.append(RLImage(io.BytesIO(png), width=avail * wfrac,
+                                height=avail * wfrac * hratio))
+            flow.append(Spacer(1, 4))
+
+    dist_c = report.get("risk_distribution") or {}
+    es_c = report.get("executive_summary") or {}
+    risks_c = [r for r in (report.get("top_risks") or []) if r.get("risk_score")][:10]
+    cbc_c = (report.get("cash_by_city") or [])[:12]
+    if any(dist_c.values()) or es_c.get("total_credit") or risks_c or cbc_c:
+        flow.append(Paragraph("Investigation Analytics", h2))
+        if any(dist_c.values()):
+            _chart_img(chart_images.pie_png(
+                ["Critical", "High", "Medium", "Low"],
+                [dist_c.get("CRITICAL", 0), dist_c.get("HIGH", 0),
+                 dist_c.get("MEDIUM", 0), dist_c.get("LOW", 0)],
+                "Accounts by Risk Level"))
+        if es_c.get("total_credit") or es_c.get("total_debit"):
+            _chart_img(chart_images.bar_png(
+                ["Credit", "Debit"],
+                [es_c.get("total_credit") or 0, es_c.get("total_debit") or 0],
+                "Total Credit vs Debit (Rs)"))
+        if risks_c:
+            _chart_img(chart_images.bar_png(
+                [str(r.get("node") or r.get("account")) for r in risks_c],
+                [r.get("risk_score") for r in risks_c],
+                "Top Accounts by Risk Score", xlabel="Risk score"), wfrac=1.0, hratio=0.5)
+        if cbc_c:
+            _chart_img(chart_images.bar_png(
+                [c["city"] for c in cbc_c], [c["count"] for c in cbc_c],
+                "Cash Transactions by City", xlabel="Transactions"), wfrac=1.0, hratio=0.5)
+        flow.append(Spacer(1, 6))
+
+    # -------------------------------------------- channels & categories + charts
     channels = report.get("channel_breakdown", []) or []
     cats = report.get("category_counts", {}) or {}
     timeline = report.get("activity_timeline", []) or []

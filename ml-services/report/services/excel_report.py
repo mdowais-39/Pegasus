@@ -4,6 +4,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.chart import PieChart, BarChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -28,70 +29,137 @@ def _autosize(ws):
         ws.column_dimensions[col[0].column_letter].width = min(60, width + 2)
 
 
+# --------------------------------------------------------------------------
+# Chart helpers — the previous charts were unreliable because data, headers and
+# the charts themselves were crammed onto one sheet with references that drifted
+# off by a row. Each chart now owns a CLEAN 2-column data block (header row +
+# label/value rows) placed in columns A:B, with the chart anchored well clear in
+# column D. References are derived from the exact block, so labels and values
+# always line up.
+# --------------------------------------------------------------------------
+def _write_block(ws, header, pairs, top_row=1, label_col=1):
+    """Write [header] then (label, value) rows in two adjacent columns.
+    Returns (cats_ref, data_ref) — data_ref includes the header cell so
+    `titles_from_data=True` names the series."""
+    vcol = label_col + 1
+    ws.cell(row=top_row, column=label_col, value=header[0]).font = _HEADER_FONT
+    ws.cell(row=top_row, column=label_col).fill = _HEADER_FILL
+    ws.cell(row=top_row, column=vcol, value=header[1]).font = _HEADER_FONT
+    ws.cell(row=top_row, column=vcol).fill = _HEADER_FILL
+    r = top_row + 1
+    for label, value in pairs:
+        ws.cell(row=r, column=label_col, value=label)
+        ws.cell(row=r, column=vcol, value=value)
+        r += 1
+    last = r - 1
+    if last < top_row + 1:      # no data rows
+        return None, None
+    cats = Reference(ws, min_col=label_col, min_row=top_row + 1, max_row=last)
+    data = Reference(ws, min_col=vcol, min_row=top_row, max_row=last)  # incl header
+    return cats, data
+
+
+def _pie(ws, anchor, title, cats, data):
+    ch = PieChart()
+    ch.title = title
+    ch.add_data(data, titles_from_data=True)
+    ch.set_categories(cats)
+    ch.dataLabels = DataLabelList()
+    ch.dataLabels.showPercent = True
+    ch.height, ch.width = 9, 15
+    ws.add_chart(ch, anchor)
+
+
+def _bar(ws, anchor, title, cats, data, horizontal=False, show_val=True):
+    ch = BarChart()
+    ch.type = "bar" if horizontal else "col"
+    ch.title = title
+    ch.add_data(data, titles_from_data=True)
+    ch.set_categories(cats)
+    ch.legend = None
+    if show_val:
+        ch.dataLabels = DataLabelList()
+        ch.dataLabels.showVal = True
+    ch.height, ch.width = 9, 16
+    ws.add_chart(ch, anchor)
+
+
 def _channels_sheet(wb, report):
-    """Channel/category counts + native Excel pie, bar and velocity charts."""
+    """Native, editable Excel charts on clean dedicated sheets."""
     channels = report.get("channel_breakdown") or []
     cats = report.get("category_counts") or {}
     timeline = report.get("activity_timeline") or []
-    if not channels and not cats:
-        return
+    dist = report.get("risk_distribution") or {}
+    es = report.get("executive_summary") or {}
+    top_risks = [r for r in (report.get("top_risks") or []) if r.get("risk_score")][:10]
+    cash_by_city = (report.get("cash_by_city") or [])[:12]
 
-    ws = _sheet(wb, "Channels & Categories")
+    # ---- Channel Analysis (pie share + bar counts) ----
+    if channels:
+        ws = _sheet(wb, "Channel Analysis")
+        pairs = [(c.get("channel"), c.get("count") or 0) for c in channels]
+        cref, dref = _write_block(ws, ["Channel / Class", "Transactions"], pairs)
+        if cref:
+            _pie(ws, "D1", "Transaction Share by Channel", cref, dref)
+            _bar(ws, "D20", "Transactions per Channel / Class", cref, dref,
+                 horizontal=True)
+        _autosize(ws)
 
-    # headline category counts
-    ws["A1"] = "Category Counts"
-    ws["A1"].font = _TITLE_FONT
-    _header_row(ws, ["Category", "Count"], row=2)
-    label_map = [
-        ("total_transactions", "Total Transactions"),
-        ("credits", "Credits"), ("debits", "Debits"),
-        ("atm_withdrawals", "ATM Withdrawals"), ("cash_deposits", "Cash Deposits"),
-        ("failed_transactions", "Failed / Reversed"),
-        ("digital_upi", "Digital (UPI/apps)"), ("cheque", "Cheque"),
-        ("card_pos", "Card / POS"),
-    ]
-    r = 3
-    for key, lbl in label_map:
-        ws.cell(row=r, column=1, value=lbl)
-        ws.cell(row=r, column=2, value=cats.get(key, 0))
-        r += 1
+    # ---- Category & Risk (category bar + risk pie + credit/debit bar) ----
+    if cats or dist or es.get("total_credit") or es.get("total_debit"):
+        ws = _sheet(wb, "Category & Risk")
+        label_map = [
+            ("total_transactions", "Total Transactions"), ("credits", "Credits"),
+            ("debits", "Debits"), ("atm_withdrawals", "ATM Withdrawals"),
+            ("cash_deposits", "Cash Deposits"),
+            ("failed_transactions", "Failed / Reversed"),
+            ("digital_upi", "Digital (UPI/apps)"), ("cheque", "Cheque"),
+            ("card_pos", "Card / POS"),
+        ]
+        cat_pairs = [(lbl, cats.get(key, 0)) for key, lbl in label_map]
+        cref, dref = _write_block(ws, ["Category", "Count"], cat_pairs, top_row=1)
+        if cref:
+            _bar(ws, "D1", "Category Counts", cref, dref, horizontal=True)
 
-    # class-wise channel table (anchored so charts can reference it)
-    ch_hdr = r + 1
-    ws.cell(row=ch_hdr, column=1, value="Class-wise Transaction Counts").font = _TITLE_FONT
-    ch_hdr += 1
-    _header_row(ws, ["Channel / Class", "Transactions", "Total Value"], row=ch_hdr)
-    first = ch_hdr + 1
-    row = first
-    for c in channels:
-        ws.cell(row=row, column=1, value=c.get("channel"))
-        ws.cell(row=row, column=2, value=c.get("count"))
-        ws.cell(row=row, column=3, value=c.get("value"))
-        row += 1
-    last = row - 1
-    _autosize(ws)
+        # risk distribution block lower down (col A), pie to its right
+        risk_top = len(cat_pairs) + 4
+        risk_pairs = [(lvl.title(), dist.get(lvl, 0))
+                      for lvl in ("CRITICAL", "HIGH", "MEDIUM", "LOW")]
+        if any(v for _, v in risk_pairs):
+            cref2, dref2 = _write_block(ws, ["Risk Level", "Accounts"], risk_pairs,
+                                        top_row=risk_top)
+            _pie(ws, f"D{risk_top}", "Accounts by Risk Level", cref2, dref2)
 
-    if channels and last >= first:
-        cats_ref = Reference(ws, min_col=1, min_row=first, max_row=last)
-        cnt_ref = Reference(ws, min_col=2, min_row=ch_hdr, max_row=last)  # incl header
+        # credit vs debit block further down
+        cd_top = risk_top + len(risk_pairs) + 4
+        cd_pairs = [("Credit", es.get("total_credit") or 0),
+                    ("Debit", es.get("total_debit") or 0)]
+        if any(v for _, v in cd_pairs):
+            cref3, dref3 = _write_block(ws, ["Direction", "Total Value"], cd_pairs,
+                                        top_row=cd_top)
+            _bar(ws, f"D{cd_top}", "Total Credit vs Debit (Rs)", cref3, dref3)
+        _autosize(ws)
 
-        pie = PieChart()
-        pie.title = "Transaction Share by Channel"
-        pie.add_data(cnt_ref, titles_from_data=True)
-        pie.set_categories(cats_ref)
-        pie.height, pie.width = 8, 13
-        ws.add_chart(pie, "E2")
+    # ---- Top Suspicious Accounts (bar) ----
+    if top_risks:
+        ws = _sheet(wb, "Top Risk Accounts")
+        pairs = [(str(r.get("node") or r.get("account")), r.get("risk_score") or 0)
+                 for r in top_risks]
+        cref, dref = _write_block(ws, ["Account", "Risk Score"], pairs)
+        if cref:
+            _bar(ws, "D1", "Top Accounts by Risk Score", cref, dref, horizontal=True)
+        _autosize(ws)
 
-        bar = BarChart()
-        bar.type = "bar"
-        bar.title = "Transactions per Channel/Class"
-        bar.add_data(cnt_ref, titles_from_data=True)
-        bar.set_categories(cats_ref)
-        bar.legend = None
-        bar.height, bar.width = 8, 13
-        ws.add_chart(bar, "E19")
+    # ---- Cash Hotspots by city (bar) ----
+    if cash_by_city:
+        ws = _sheet(wb, "Cash Hotspots")
+        pairs = [(c["city"], c["count"]) for c in cash_by_city]
+        cref, dref = _write_block(ws, ["City", "Cash Transactions"], pairs)
+        if cref:
+            _bar(ws, "D1", "Cash Transactions by City", cref, dref, horizontal=True)
+        _autosize(ws)
 
-    # fund-velocity timeline on its own sheet (dates can be many)
+    # ---- Fund Velocity over time (count bars + credit/debit lines) ----
     if timeline:
         tw = _sheet(wb, "Fund Velocity")
         _header_row(tw, ["Date", "Txn Count", "Credit", "Debit"], row=1)
@@ -104,22 +172,22 @@ def _channels_sheet(wb, report):
         n = len(timeline) + 1
         dates_ref = Reference(tw, min_col=1, min_row=2, max_row=n)
 
-        line = LineChart()
-        line.title = "Fund Movement Over Time (Credit vs Debit)"
-        line.add_data(Reference(tw, min_col=3, max_col=4, min_row=1, max_row=n),
-                      titles_from_data=True)
-        line.set_categories(dates_ref)
-        line.height, line.width = 9, 18
-        tw.add_chart(line, "F2")
-
         vol = BarChart()
         vol.title = "Transaction Count Over Time"
         vol.add_data(Reference(tw, min_col=2, min_row=1, max_row=n),
                      titles_from_data=True)
         vol.set_categories(dates_ref)
         vol.legend = None
-        vol.height, vol.width = 9, 18
-        tw.add_chart(vol, "F21")
+        vol.height, vol.width = 8, 20
+        tw.add_chart(vol, "F1")
+
+        line = LineChart()
+        line.title = "Fund Movement Over Time (Credit vs Debit)"
+        line.add_data(Reference(tw, min_col=3, max_col=4, min_row=1, max_row=n),
+                      titles_from_data=True)
+        line.set_categories(dates_ref)
+        line.height, line.width = 8, 20
+        tw.add_chart(line, "F18")
 
 
 def build_excel(report: dict) -> bytes:

@@ -38,6 +38,48 @@ def _add_png(doc, png: bytes, width_in=5.6):
     doc.add_picture(io.BytesIO(png), width=Inches(width_in))
 
 
+def _analytics_charts(doc, report):
+    """Investigator-facing charts distilled from the report data: risk mix,
+    money direction, most-suspicious accounts, and physical cash hotspots.
+    Charts embed when matplotlib is available; a data table always renders."""
+    _heading(doc, "Investigation Analytics")
+
+    # Risk distribution (severity mix)
+    dist = report.get("risk_distribution") or {}
+    if any(dist.values()):
+        labels = ["Critical", "High", "Medium", "Low"]
+        vals = [dist.get("CRITICAL", 0), dist.get("HIGH", 0),
+                dist.get("MEDIUM", 0), dist.get("LOW", 0)]
+        _heading(doc, "Risk Distribution", level=2)
+        _add_png(doc, chart_images.pie_png(labels, vals, "Accounts by Risk Level"),
+                 width_in=4.6)
+
+    # Money direction — total credit vs debit
+    es = report.get("executive_summary") or {}
+    tc, td = es.get("total_credit") or 0, es.get("total_debit") or 0
+    if tc or td:
+        _heading(doc, "Total Credit vs Debit", level=2)
+        _add_png(doc, chart_images.bar_png(["Credit", "Debit"], [tc, td],
+                                           "Total Credit vs Debit (₹)"), width_in=4.8)
+
+    # Most-suspicious accounts by risk score
+    risks = [r for r in (report.get("top_risks") or []) if r.get("risk_score")][:10]
+    if risks:
+        _heading(doc, "Top Suspicious Accounts", level=2)
+        _add_png(doc, chart_images.bar_png(
+            [str(r.get("node") or r.get("account")) for r in risks],
+            [r.get("risk_score") for r in risks],
+            "Top Accounts by Risk Score", xlabel="Risk score"), width_in=6.0)
+
+    # Physical cash hotspots (withdrawals/deposits by city)
+    cbc = (report.get("cash_by_city") or [])[:12]
+    if cbc:
+        _heading(doc, "Cash Withdrawal / Deposit Hotspots", level=2)
+        _add_png(doc, chart_images.bar_png(
+            [c["city"] for c in cbc], [c["count"] for c in cbc],
+            "Cash Transactions by City", xlabel="Transactions"), width_in=6.0)
+
+
 def _channel_section(doc, report):
     """Payment-channel & category analytics with pie / bar / velocity charts.
     Charts embed when matplotlib is available; the data tables always render."""
@@ -125,6 +167,7 @@ def build_docx(report: dict) -> bytes:
         )
 
     _channel_section(doc, report)
+    _analytics_charts(doc, report)
 
     val = report.get("validation")
     if val:

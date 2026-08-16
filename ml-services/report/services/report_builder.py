@@ -101,6 +101,7 @@ class ReportBuilder:
             "top_risks": top_risks,
             "top_entities": entities,
             "cash_locations": cash_locations,
+            "cash_by_city": self._cash_by_city(cash_locations),
             "channel_breakdown": analytics["channel_breakdown"],
             "category_counts": analytics["categories"],
             "activity_timeline": analytics["timeline"],
@@ -130,6 +131,20 @@ class ReportBuilder:
                 "narration": r.get("narration"),
             })
         return out
+
+    def _cash_by_city(self, cash_locations):
+        """Aggregate cash withdrawals/deposits by city (count + total value) —
+        the physical-leads chart for officers."""
+        agg = {}
+        for c in cash_locations or []:
+            city = c.get("city")
+            if not city or city == "Unknown":
+                continue
+            key = f"{city}, {c.get('state')}" if c.get("state") else city
+            a = agg.setdefault(key, {"city": key, "count": 0, "value": 0.0})
+            a["count"] += 1
+            a["value"] += float(c.get("amount") or 0)
+        return sorted(agg.values(), key=lambda x: x["count"], reverse=True)
 
     def _flagged_findings(self, top_risks):
         """HIGH/CRITICAL accounts distilled into investigator-facing findings —

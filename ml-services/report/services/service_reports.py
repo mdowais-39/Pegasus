@@ -81,18 +81,17 @@ def _round_trips_doc(case_id, focus_chain=None):
             amt = amts[i] if i < len(amts) else None
             hop_rows.append([f"#{cid}", n, nxt, _money(amt)])
 
-    total_circulated = sum(t.get("min_amount", 0) or 0 for t in trips)
-    focus_note = (f" (selected chain #{focus_chain})"
+    focus_note = (f" (chain #{focus_chain})"
                   if focus_chain is not None else "")
+    # Bank-facing: exact chain + hop details only, no analytical commentary.
     return {
         "title": "Round-Trip Investigation Report",
         "scope": _scope_label(case_id) + focus_note,
         "generated_at": _now(),
-        "subtitle": f"{len(trips)} circular / round-trip chain(s) detected. "
-                    f"Bottleneck (circulatable) total: {_money(total_circulated)}.",
+        "subtitle": f"{len(trips)} circular / round-trip chain(s).",
         "sections": [
-            {"heading": "Detected Round Trips", "kind": "table",
-             "columns": ["Chain", "Path", "Hops", "Bottleneck", "Total"],
+            {"heading": "Round-Trip Chains", "kind": "table",
+             "columns": ["Chain", "Path", "Hops", "Min Amount", "Total Amount"],
              "rows": chain_rows, "widths": [0.7, 5.0, 0.9, 1.6, 1.6],
              "right_cols": [3, 4], "empty": "No round trips detected in this scope."},
             {"heading": "Per-Hop Transfers", "kind": "table",
@@ -179,92 +178,68 @@ def _single_credit_trail(txn_id):
     return []
 
 
-def _emit_trail_rows(tr, trail_no, credit_rows, ledger_rows):
-    """Append one FIFO trail's credit summary row + full ledger lines. Raw
-    narration/date/value-date/cheque-no fields are copied verbatim — no
-    annotations mutate the underlying transaction values."""
+def _emit_trail_rows(tr, trail_no, ledger_rows):
+    """Append one FIFO trail's ledger lines: the credit, then the debits that
+    consumed it. Bank-facing — every field is the EXACT transaction value
+    (date, value date, narration, cheque/ref no, amount, balance). No arrows,
+    no explanatory notes, no derived commentary."""
     camt = tr.get("credit_amount", 0) or 0
-    src = tr.get("source") or "Unresolved"
-    fully = "Yes" if tr.get("fully_traced") else "No"
-    credit_rows.append([
-        f"#{trail_no}", tr.get("credit_date"), src, _money(camt),
-        _money(tr.get("spent")), _money(tr.get("remaining")), fully,
-    ])
 
-    # ledger: the credit line
+    # ledger: the credit line (exact narration, exact amounts)
     ledger_rows.append([
         f"Credit #{trail_no}",
         tr.get("credit_date"), tr.get("credit_time"), tr.get("credit_date"),
-        f"{tr.get('credit_narration') or ''}  [from {src}; spent "
-        f"{_money(tr.get('spent'))}, remaining {_money(tr.get('remaining'))}]",
+        tr.get("credit_narration") or "",
         tr.get("credit_reference") or "",
         "", _money(camt), _money(tr.get("credit_balance")), "",
     ])
 
-    # ledger: each debit that consumed this credit
+    # ledger: each debit that consumed this credit (exact narration only)
     for c in tr.get("consumed_by", []) or []:
         narr = c.get("narration") or ""
-        dest = c.get("destination") or narr[:30]
-        traced = c.get("amount") or 0
-        total = c.get("debit_total") or traced
-        untraced = c.get("untraced") or 0
-        details = f"-> {dest}  {narr}".strip()
-        if untraced and untraced > 0.01:
-            details += (f"  [of the full {_money(total)} debit, "
-                        f"{_money(untraced)} was spent from untracked funds]")
-        elif total and total > traced + 0.01:
-            details += (f"  [part of a {_money(total)} debit (ref "
-                        f"{c.get('reference_number') or 'n/a'}) split across multiple credits]")
-        # Debit column shows the amount TRACED to this credit (matches the
-        # money-trail investigation), not the full multi-credit debit.
         ledger_rows.append([
             f"  Debit #{trail_no}",
             c.get("date"), c.get("time"), c.get("date"),
-            details,
+            narr,
             c.get("reference_number") or "",
-            _money(traced), "", _money(c.get("balance")),
+            _money(c.get("amount") or 0), "", _money(c.get("balance")),
             _cash_loc(narr),
         ])
     return camt
 
 
 def _money_trail_doc(case_id, focus_credit=None):
-    """Bank-grade money-trail ledger built directly from the FIFO trail service —
-    so the document matches the money-trail investigation exactly. Each traced
-    credit is followed by the debit lines that consumed it, with the portion
-    traced to this credit vs. the rest of the debit ("leftover") made explicit.
+    """Bank-facing money-trail ledger built from the FIFO trail service. Each
+    traced credit is followed by the debit lines that consumed it, with only
+    the exact transaction fields — this is the record investigators forward to
+    banks for onward investigation.
 
     focus_credit: when set, export ONLY the debit trail for that one selected
     credit transaction (the selective-export feature), otherwise every credit
     in scope."""
-    credit_rows, ledger_rows = [], []
+    ledger_rows = []
     total_credit = 0.0
     trail_no = 0
 
     if focus_credit:
         for tr in _single_credit_trail(focus_credit):
             trail_no += 1
-            total_credit += _emit_trail_rows(tr, trail_no, credit_rows, ledger_rows)
+            total_credit += _emit_trail_rows(tr, trail_no, ledger_rows)
     else:
         sids = _loader.all_statement_ids() if case_id == "all" else [case_id]
         for sid in sids:
             for tr in _statement_trails(sid):
                 trail_no += 1
-                total_credit += _emit_trail_rows(tr, trail_no, credit_rows, ledger_rows)
+                total_credit += _emit_trail_rows(tr, trail_no, ledger_rows)
 
     focus_note = " (selected credit)" if focus_credit else ""
     return {
         "title": "Money-Trail (FIFO) Investigation Report",
         "scope": _scope_label(case_id) + focus_note,
         "generated_at": _now(),
-        "subtitle": f"{len(credit_rows)} credit inflow(s) traced FIFO to their outflows. "
-                    f"Total credited: {_money(total_credit)}. Prepared for onward bank investigation.",
+        "subtitle": f"{trail_no} credit trail(s). Total credited: {_money(total_credit)}.",
         "sections": [
-            {"heading": "Credit Inflows (traced)", "kind": "table",
-             "columns": ["Trail", "Credit Date", "Source", "Credited", "Spent", "Remaining", "Fully Traced"],
-             "rows": credit_rows, "widths": [0.7, 1.4, 2.8, 1.4, 1.4, 1.4, 1.1],
-             "right_cols": [3, 4, 5], "empty": "No credit inflows to trace in this scope."},
-            {"heading": "Full Transaction Ledger (for bank investigation)", "kind": "table",
+            {"heading": "Transaction Ledger", "kind": "table",
              "columns": ["Trail", "Date", "Time", "Value Date", "Transaction Details",
                          "Cheque/Ref No", "Debit", "Credit", "Balance", "Cash Location"],
              "rows": ledger_rows, "widths": [0.9, 1.1, 0.9, 1.1, 3.2, 1.2, 1.2, 1.2, 1.2, 1.4],
