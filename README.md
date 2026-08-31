@@ -27,8 +27,9 @@ Built for law-enforcement & bank fraud-investigation teams. Designed so a non-te
 9. [Docker Setup & Execution](#-docker-setup--execution)
 10. [Environment Variables Reference](#-environment-variables-reference)
 11. [API Access](#-api-access)
-12. [Testing](#-testing)
-13. [Troubleshooting](#-troubleshooting)
+12. [Further Reading](#-further-reading)
+13. [Testing](#-testing)
+14. [Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -43,10 +44,11 @@ Built for law-enforcement & bank fraud-investigation teams. Designed so a non-te
 - **Rapid pass-through detection** — accounts where money lands and leaves within minutes (mule/gaming-fraud signature).
 - **FIFO money-trail tracing** — for any credit, trace exactly which debits spent it, in order, down to the rupee — including genuinely un-traceable ("untracked funds") remainders.
 - **Cash/ATM location extraction** — deterministic parsing of ATM/cash narrations into city/state + time, so an officer knows *where to go*.
-- **Payment-channel segregation** — transactions auto-classified into UPI / PhonePe / GPay / Paytm / IMPS / NEFT / RTGS / ATM-Cash / Cheque / Card-POS, filterable everywhere.
-- **Explainable risk scoring** — a multi-signal fusion engine (round-trips, layering, fan-in/out, anomaly, temporal, pass-through, centrality) with plain-language "why flagged" evidence and investigator-friendly tags/badges.
+- **Payment-channel segregation** — transactions auto-classified into UPI / PhonePe / GPay / Paytm / IMPS / NEFT / RTGS / BLKRTGS / NACH-ECS / ATM-Cash / Cheque / Card-POS, filterable everywhere.
+- **Explainable risk scoring** — a multi-signal fusion engine (round-trips, layering, fan-in/out, anomaly, temporal, pass-through, centrality) with plain-language "why flagged" evidence and investigator-friendly tags/badges. Pooled/generic narration buckets (CASH, known merchant keywords, generic business-suffix words like "Enterprises"/"Private") are excluded from round-trip detection so they can't create false circular-flow positives.
 - **Real-time alerts** — a nav bell + toast + panel surfaces HIGH/CRITICAL findings the moment a statement finishes processing.
-- **Downloadable investigation reports** — PDF, Excel, and Word (DOCX) — both a consolidated case report and dedicated per-service reports (Round Trips, Money Flow, Money Trail bank-ledger format), scoped to a single statement or the whole network, plus one-click email delivery.
+- **Downloadable investigation reports** — PDF, Excel, and Word (DOCX) — a consolidated case report plus dedicated per-service reports (Round Trips, Money Flow, Money Trail bank-ledger format), each with investigator-analytics charts (risk distribution, credit-vs-debit, top-suspicious-accounts, cash-hotspot-by-city, channel/category breakdown, fund-velocity-over-time), scoped to a single statement or the whole network, plus one-click email delivery.
+- **Selective export** — export just one selected round-trip chain or one selected money-trail credit (Word/Excel/PDF) instead of the full report, with exact transaction fields only — no analytical commentary — so it's ready to forward to a bank for onward investigation.
 
 The product is built to be **visual-first**: badges over raw numbers, colour-coded severity, and graphs/timelines that a non-technical investigating officer can read at a glance — not a data-science dashboard.
 
@@ -62,7 +64,8 @@ The product is built to be **visual-first**: badges over raw numbers, colour-cod
 | 📍 **Cash/ATM Location Mapping** | Deterministic parser (no LLM — instant, offline, reproducible) extracts city/state/time from ATM & cash narrations |
 | 🏷️ **Malicious-Activity Tags** | Plain-language badges (Circular Flow, Rapid Pass-Through, Accumulation, Layering, Collector, Distributor, Anomaly…) instead of raw scores |
 | 🔔 **Alerts** | Balanced-sensitivity alerting (HIGH/CRITICAL accounts + any round-trip/pass-through) via bell, toast, and panel |
-| 📊 **Reports** | Combined case report *and* per-service reports (Round Trips / Money Flow / Money Trail), each in PDF, Excel, and DOCX, scoped to one statement or the whole network, plus email delivery |
+| 📊 **Reports & Analytics** | Combined case report *and* per-service reports (Round Trips / Money Flow / Money Trail), each in PDF, Excel, and DOCX, with native/embedded charts (risk mix, credit vs debit, top-risk accounts, cash hotspots by city, channel/category counts, fund velocity over time), scoped to one statement or the whole network, plus email delivery |
+| ✂️ **Selective Export** | Export a single round-trip chain or a single money-trail credit's debit trail on its own — exact fields only, no commentary — ready to hand to a bank |
 | 🌐 **Whole-Network View** | Aggregate analysis across every uploaded statement, with a "representative" risk-ranking algorithm so smaller statements aren't buried by larger ones |
 
 ## 🏗️ Architecture
@@ -156,10 +159,27 @@ Install these before you start:
 | **Python** | 3.11 | a **conda** environment named `finintel` is strongly recommended (matches `environment.yml`) — the ML services use PaddleOCR/scikit-learn/pandas |
 | **Node.js & npm** | 18+ | for the frontend |
 | **PostgreSQL** | 16 | run natively **or** via the provided Docker Compose file |
+| **Poppler** (`pdftoppm`/`pdfinfo`) | any recent | **required** for scanned-PDF ingestion (`pdf2image`, used by the OCR service) — a system binary, not a pip package. See install commands below. |
 | **Docker & Docker Compose** | latest | optional — only needed if you want Postgres containerized instead of a native install |
+| **`sqlx-cli`** | matching `sqlx` 0.8 | to apply database migrations — `cargo install sqlx-cli --no-default-features --features rustls,postgres` |
 | **Git** | any recent | to clone the repo |
 
 > **Note on Neo4j:** `docker-compose.yml` also defines a Neo4j container. It is a **legacy/optional** dependency — the current graph & risk-analysis pipeline is fully Postgres-driven and in-memory (Neo4j-independent). You do not need to start it for the product to work.
+
+**Installing Poppler:**
+
+```bash
+# Windows: download a poppler release (e.g. https://github.com/oschwartz10612/poppler-windows/releases),
+# extract it, and add its `Library\bin` folder to your PATH.
+
+# macOS
+brew install poppler
+
+# Debian/Ubuntu
+sudo apt-get install -y poppler-utils
+```
+
+Verify with `pdftoppm -v` — if that command isn't found, scanned/image PDF uploads will fail even though text-based PDF/CSV/Excel statements work fine.
 
 ## 🚀 Setup & Installation
 
@@ -190,9 +210,21 @@ Create a database and user matching (or override via `DATABASE_URL`, see [Enviro
 CREATE DATABASE finintel;
 ```
 
-> Migrations under `backend/migrations/` run **automatically** on gateway startup (via `sqlx`) — no manual schema step is required with a fresh database.
+### 3. Apply the database schema
 
-### 3. Set up the Python ML services (conda)
+The gateway does **not** run migrations automatically on startup — they must be applied once before the first `cargo run`, or the gateway will fail immediately (it queries the `statements` table on boot).
+
+```bash
+cd backend
+cargo install sqlx-cli --no-default-features --features rustls,postgres   # one-time, if not already installed
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/finintel"   # PowerShell: $env:DATABASE_URL = "..."
+sqlx migrate run
+cd ..
+```
+
+This applies every file in `backend/migrations/` in order. Re-running it later (after a `git pull` that adds new migrations) is safe — already-applied migrations are skipped. (`scripts/init_postgres.sql` is a **stale, partial** early schema snapshot — kept for historical reference only; do not use it instead of `sqlx migrate run`, it's missing most of the columns/tables the app now needs.)
+
+### 4. Set up the Python ML services (conda)
 
 ```bash
 conda env create -f environment.yml -n finintel
@@ -210,7 +242,9 @@ pip install reportlab
 > pip install reportlab
 > ```
 
-### 4. Configure the report service's email settings (optional)
+`matplotlib` and `openpyxl` (both already included above) render the report charts — matplotlib produces the chart images embedded in PDF/Word reports, openpyxl produces native editable charts in Excel reports. Only `reportlab` (PDF rendering itself) needs the extra install.
+
+### 5. Configure the report service's email settings (optional)
 
 Only needed if you want the "email report" feature. Copy the example and fill in your SMTP credentials:
 
@@ -223,7 +257,7 @@ cd ../..
 
 Every other service and the gateway work with **zero configuration** — all service URLs and the database URL have sane `localhost` defaults (see [Environment Variables](#-environment-variables-reference) to override any of them).
 
-### 5. Build the backend
+### 6. Build the backend
 
 ```bash
 cd backend
@@ -231,13 +265,24 @@ cargo build
 cd ..
 ```
 
-### 6. Install frontend dependencies
+### 7. Install frontend dependencies
 
 ```bash
 cd frontend
 npm install
 cd ..
 ```
+
+### 8. Verify the setup
+
+Start everything (see [Running the Project](#-running-the-project) below), then confirm every piece is actually reachable before uploading a statement:
+
+```bash
+curl http://localhost:8080/health            # gateway + DB connectivity
+curl http://localhost:8080/services/health   # every ML microservice's health, in one call
+```
+
+Both should return a success envelope with every service marked healthy. If anything shows unhealthy, that service either isn't running or crashed on startup — check its terminal window for the error (a missing migration or a not-yet-activated conda env are the two most common first-run causes).
 
 ## ▶️ Running the Project
 
@@ -424,6 +469,16 @@ The gateway exposes a single, uniformly-enveloped REST API (`{ success, data, er
 
 See [`API_CONTRACT.md`](API_CONTRACT.md) for the full endpoint contract and [`BACKEND_EXPLAINED.md`](BACKEND_EXPLAINED.md) for a deep dive into every microservice's algorithms.
 
+## 📄 Further Reading
+
+| Doc | Covers |
+|---|---|
+| [`BACKEND_EXPLAINED.md`](BACKEND_EXPLAINED.md) | Judge/investigator-facing deep dive into every microservice's algorithms |
+| [`API_CONTRACT.md`](API_CONTRACT.md) | Full REST endpoint contract |
+| [`TESTING_AND_OPERATIONS.md`](TESTING_AND_OPERATIONS.md) | Manual test flows, DB maintenance, operational runbooks |
+| [`BACKEND_GAP_ANALYSIS_AND_ROADMAP.md`](BACKEND_GAP_ANALYSIS_AND_ROADMAP.md) | Historical gap analysis / roadmap notes |
+| [`LLM_EXTRACTION_CONSIDERATION.md`](LLM_EXTRACTION_CONSIDERATION.md) | Evaluation of using an LLM (hosted vs. local) for statement extraction — privacy/consistency tradeoffs, parked for future consideration |
+
 ## 🧪 Testing
 
 ```bash
@@ -441,7 +496,9 @@ cd ml-services/ocr   && python -m pytest
 
 ## 🛠️ Troubleshooting
 
-- **`cargo run` fails to connect to Postgres** — confirm the container/service is up (`docker compose ps` or check your native Postgres service) and `DATABASE_URL` is correct.
+- **`cargo run` connects to Postgres but then panics (`relation "statements" does not exist`)** — migrations haven't been applied. Run `sqlx migrate run` from `backend/` (see [Setup step 3](#3-apply-the-database-schema)) — this is the #1 first-run failure on a fresh clone.
+- **`cargo run` fails to connect to Postgres at all** — confirm the container/service is up (`docker compose ps` or check your native Postgres service) and `DATABASE_URL` is correct.
+- **Scanned/image PDF uploads fail (`PDFInfoNotInstalledError` or similar) while CSV/Excel/text-PDF uploads work fine** — Poppler isn't installed or isn't on PATH. See [Prerequisites](#-prerequisites).
 - **A Python service won't start / import errors** — make sure the `finintel` conda env is activated in that terminal; the report service also needs `pip install reportlab` (not in the exported environment file).
 - **Uploading a statement never finishes** — check `http://localhost:8080/services/health`; if any ML service shows unhealthy, start it (see [Running the Project](#-running-the-project)).
 - **`.env` changes don't seem to apply** — `uvicorn --reload` watches `.py` files only, not `.env`. Fully restart the affected service after editing its `.env`.
