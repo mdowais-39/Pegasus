@@ -103,6 +103,17 @@ class PostgresLoader:
             [limit],
         )
 
+    def statement_identities(self):
+        """Per-statement human-friendly identifiers so the report can show an
+        account number / file name instead of an opaque statement UUID."""
+        return _all(
+            """
+            SELECT id::text AS id, filename, account_number,
+                   account_holder, bank_name
+            FROM statements
+            """
+        )
+
     def transactions_full(self, statement_id):
         """Full ledger detail for a statement's transactions, keyed for the
         money-trail bank report (date, time, narration, reference, dr/cr, balance)."""
